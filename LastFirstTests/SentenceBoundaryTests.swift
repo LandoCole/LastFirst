@@ -15,52 +15,15 @@ final class SentenceBoundaryTests: XCTestCase {
         super.tearDown()
     }
     
-    // MARK: - Helper to test sentence boundaries
+    // MARK: - Helper to test paragraph boundaries (via Bookmark)
     
     private func loadAndGetBookmarkText(words: [String], startIndex: Int) -> String {
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: startIndex))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: startIndex)
         viewModel.startBookmarkCreation()
         return viewModel.getBookmarkText()
-    }
-    
-    // MARK: - Sentence End Detection Tests
-    
-    func testSentenceEnd_periodEnding() {
-        let words = ["The", "quick", "fox.", "A", "new", "sentence."]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        // Stream mode should find sentence end at "fox."
-        // This tests the internal findSentenceEnd logic via stream mode initialization
-        XCTAssertEqual(viewModel.streamVisibleText, "The")
-    }
-    
-    func testSentenceEnd_exclamationEnding() {
-        let words = ["Hello", "world!", "How", "are", "you?"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        XCTAssertEqual(viewModel.streamVisibleText, "Hello")
-    }
-    
-    func testSentenceEnd_questionEnding() {
-        let words = ["How", "are", "you?", "I", "am", "fine."]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        XCTAssertEqual(viewModel.streamVisibleText, "How")
-    }
-    
-    func testSentenceEnd_quotedEnding() {
-        let words = ["He", "said", "\"Hello.\"", "She", "replied."]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        XCTAssertEqual(viewModel.streamVisibleText, "He")
     }
     
     // MARK: - Paragraph Boundary Tests (via Bookmark)
@@ -112,52 +75,20 @@ final class SentenceBoundaryTests: XCTestCase {
     
     func testSentenceEnd_noEndingPunctuation() {
         // When no sentence ending is found, should fallback to max 20 words
-        var words = Array(repeating: "word", count: 30)
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        // Should initialize without crashing
-        XCTAssertEqual(viewModel.streamVisibleText, "word")
+        let words = Array(repeating: "word", count: 30)
+        let text = loadAndGetBookmarkText(words: words, startIndex: 0)
+        XCTAssertFalse(text.isEmpty)
     }
     
     func testSentenceEnd_atEndOfContent() {
         let words = ["Last", "word"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        XCTAssertEqual(viewModel.streamVisibleText, "Last")
+        let text = loadAndGetBookmarkText(words: words, startIndex: 0)
+        XCTAssertEqual(text, "Last word")
     }
     
     func testEmptyContent_streamMode() {
-        viewModel.loadContent(words: [], chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        XCTAssertEqual(viewModel.streamVisibleText, "")
-    }
-    
-    // MARK: - Stream Mode Initialization
-    
-    func testStreamMode_initializesCorrectly() {
-        let words = ["The", "quick", "brown", "fox.", "Jumps", "over."]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        // Should start with first word
-        XCTAssertEqual(viewModel.streamVisibleText, "The")
-        XCTAssertFalse(viewModel.isBackspacing)
-    }
-    
-    func testStreamMode_initializesFromMiddle() {
-        let words = ["The", "quick", "brown", "fox.", "Jumps", "over."]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 4))
-        viewModel.readingMode = .stream
-        viewModel.initializeStreamMode()
-        
-        // Should start with word at current position
-        XCTAssertEqual(viewModel.streamVisibleText, "Jumps")
+        viewModel.loadContent(tokens: [], chapters: [], startTokenIndex: 0)
+        viewModel.startBookmarkCreation()
+        XCTAssertEqual(viewModel.getBookmarkText(), "")
     }
 }

@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 
+@MainActor
 class ReadingViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var isPlaying: Bool = false
@@ -9,7 +10,9 @@ class ReadingViewModel: ObservableObject {
     @Published var wordsPerMinute: Int = 300
     @Published var readingMode: ReadingMode = .spritz
     @Published var isDialPushedDown: Bool = false
-    
+    @Published private(set) var isInParagraphBreath: Bool = false
+    @Published var activeTitleCard: TitleCard? = nil
+
     var isPaused: Bool { !isPlaying }
     
     // MARK: - Loading State
@@ -25,8 +28,45 @@ class ReadingViewModel: ObservableObject {
 
     // MARK: - Content
     @Published private(set) var words: [String] = []
+    @Published private(set) var tokens: [Token] = []
     @Published private(set) var chapters: [Chapter] = []
-    @Published private var currentChapterIndex: Int = 0
+    @Published private(set) var blocks: [TextBlock] = []
+    @Published private(set) var currentChapterIndex: Int = 0
+
+    // MARK: - Structural Token Tracking
+    struct TitleCard: Equatable {
+        var title: String
+        var subtitle: String?
+        var epigraph: String?
+    }
+
+    private var paragraphEndWordIndexSet: Set<Int> = []
+    private var titleCardByWordIndex: [Int: TitleCard] = [:]
+    private var pendingWordIndexAfterTitleCard: Int? = nil
+
+    private var wordTokenIndexByWordIndex: [Int] = []
+    private var wordIndexByTokenIndex: [Int?] = []
+
+    struct PausedWord: Identifiable, Equatable {
+        var id: Int { wordIndex }
+        var wordIndex: Int
+        var text: String
+    }
+
+    enum PausedDisplayLineKind: Equatable {
+        case text([PausedWord])
+        case title(String, TokenKind)
+        case blank
+        case listItem([PausedWord], bullet: String)
+        case blockquote([PausedWord])
+        case codeBlock(String)
+        case image(altText: String)
+    }
+
+    struct PausedDisplayLine: Identifiable, Equatable {
+        var id: Int
+        var kind: PausedDisplayLineKind
+    }
 
     // MARK: - Soft Start
     private var softStartPercentage: Double = 0.6
@@ -34,9 +74,15 @@ class ReadingViewModel: ObservableObject {
     private var softStartStartTime: Date?
     private let softStartDuration: TimeInterval = 60.0
 
+    // MARK: - Paragraph Breath
+    private var paragraphBreathMs: Int = 0
+
     // MARK: - Async Timer
     private var readingTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Metrics
+    var metricsTracker: ReadingMetricsTracker?
 
     // MARK: - Callbacks
     var onChapterChange: ((Chapter) -> Void)?
@@ -56,7 +102,39 @@ class ReadingViewModel: ObservableObject {
     var effectiveWPM: Int {
         isPlaying ? currentSoftStartWPM : wordsPerMinute
     }
-    
+
+    var currentChapter: Chapter? {
+        guard !chapters.isEmpty, currentChapterIndex >= 0, currentChapterIndex < chapters.count else { return nil }
+        return chapters[currentChapterIndex]
+    }
+
+    var chapterProgress: Double {
+        guard let chapter = currentChapter else { return 0 }
+        let chapterWordCount = chapter.endWordIndex - chapter.startWordIndex
+        guard chapterWordCount > 0 else { return 0 }
+        let positionInChapter = currentWordIndex - chapter.startWordIndex
+        return Double(max(0, positionInChapter)) / Double(chapterWordCount)
+    }
+
+    var chapterTimeRemaining: TimeInterval {
+        guard let chapter = currentChapter, wordsPerMinute > 0 else { return 0 }
+        let remainingWords = max(0, chapter.endWordIndex - currentWordIndex)
+        return Double(remainingWords) / Double(wordsPerMinute) * 60.0
+    }
+
+    func setProgress(_ progress: Double, chapterMode: Bool) {
+        let clamped = max(0, min(1, progress))
+        if chapterMode {
+            guard let chapter = currentChapter else { return }
+            let chapterWordCount = chapter.endWordIndex - chapter.startWordIndex
+            let targetWord = chapter.startWordIndex + Int(clamped * Double(chapterWordCount))
+            goToWord(at: min(targetWord, max(0, chapter.endWordIndex - 1)))
+        } else {
+            let targetWord = Int(clamped * Double(max(1, words.count - 1)))
+            goToWord(at: targetWord)
+        }
+    }
+
     private var isTaskRunning: Bool {
         readingTask != nil && !readingTask!.isCancelled
     }
@@ -83,24 +161,87 @@ class ReadingViewModel: ObservableObject {
                 if newMode == .stream {
                     self?.initializeStreamMode()
                 }
+
             }
             .store(in: &cancellables)
     }
 
     // MARK: - Content Loading
-    func loadContent(words: [String], chapters: [Chapter], startPosition: ReadingPosition) {
-        self.words = words
+    func loadContent(tokens: [Token], chapters: [Chapter], blocks: [TextBlock] = [], startTokenIndex: Int) {
+        self.tokens = tokens
         self.chapters = chapters
+        self.blocks = blocks
+
+        rebuildWordIndexMappings(tokens: tokens)
         
         // Invalidate line cache when new content is loaded
         invalidateLineCache()
         
-        // Validate startPosition to prevent out-of-bounds access
-        let validWordIndex = min(max(0, startPosition.wordIndex), max(0, words.count - 1))
-        let validChapterIndex = min(max(0, startPosition.chapterIndex), max(0, chapters.count - 1))
-        
+        let computedStartWordIndex = wordIndexFromTokenIndex(startTokenIndex)
+        let validWordIndex = min(max(0, computedStartWordIndex), max(0, words.count - 1))
         self.currentWordIndex = words.isEmpty ? 0 : validWordIndex
-        self.currentChapterIndex = chapters.isEmpty ? 0 : validChapterIndex
+        updateCurrentChapter()
+    }
+
+    private func rebuildWordIndexMappings(tokens: [Token]) {
+        var wordCount = 0
+
+        var words: [String] = []
+        words.reserveCapacity(tokens.count)
+
+        wordTokenIndexByWordIndex = []
+        wordIndexByTokenIndex = Array(repeating: nil, count: tokens.count)
+
+        paragraphEndWordIndexSet = []
+        titleCardByWordIndex = [:]
+        pendingWordIndexAfterTitleCard = nil
+        activeTitleCard = nil
+
+        var pendingChapterTitle: String? = nil
+
+        for (tokenIndex, token) in tokens.enumerated() {
+            switch token.kind {
+            case .chapterTitle:
+                pendingChapterTitle = token.text
+            case .paragraphBreak:
+                if wordCount > 0 {
+                    paragraphEndWordIndexSet.insert(wordCount - 1)
+                }
+            case .word, .footnoteRef:
+                if let title = pendingChapterTitle {
+                    titleCardByWordIndex[wordCount] = TitleCard(title: title, subtitle: nil, epigraph: nil)
+                    pendingChapterTitle = nil
+                }
+
+                words.append(token.text)
+                wordTokenIndexByWordIndex.append(tokenIndex)
+                wordIndexByTokenIndex[tokenIndex] = wordCount
+                wordCount += 1
+            case .listBullet:
+                // Structural marker — not counted as a word, but included in display
+                break
+            case .imageAlt:
+                // Image alt text — not counted as a word for reading progress
+                break
+            default:
+                break
+            }
+        }
+
+        self.words = words
+    }
+
+    private func wordIndexFromTokenIndex(_ tokenIndex: Int) -> Int {
+        guard !wordIndexByTokenIndex.isEmpty else { return 0 }
+
+        let clamped = min(max(0, tokenIndex), wordIndexByTokenIndex.count - 1)
+        if let exact = wordIndexByTokenIndex[clamped] { return exact }
+
+        for i in clamped..<wordIndexByTokenIndex.count {
+            if let v = wordIndexByTokenIndex[i] { return v }
+        }
+
+        return max(0, words.count - 1)
     }
 
     // MARK: - Playback Control
@@ -116,16 +257,25 @@ class ReadingViewModel: ObservableObject {
     func play() {
         guard !words.isEmpty else { return }
         guard !isTaskRunning else { return }
+
+        if let pending = pendingWordIndexAfterTitleCard {
+            activeTitleCard = nil
+            pendingWordIndexAfterTitleCard = nil
+            currentWordIndex = min(max(0, pending), max(0, words.count - 1))
+            updateCurrentChapter()
+        }
         
         isPlaying = true
+        metricsTracker?.resume()
         softStartStartTime = Date()
         currentSoftStartWPM = max(50, Int(Double(wordsPerMinute) * softStartPercentage))
-        
+
         startReadingLoop()
     }
 
     func pause() {
         isPlaying = false
+        metricsTracker?.pause()
         stopReadingLoop()
     }
 
@@ -150,7 +300,7 @@ class ReadingViewModel: ObservableObject {
                     try await Task.sleep(nanoseconds: intervalNanoseconds)
                     
                     if !Task.isCancelled && self.isPlaying {
-                        self.advanceWord()
+                        await self.advanceWord()
                     }
                 } catch {
                     // Task was cancelled
@@ -184,19 +334,50 @@ class ReadingViewModel: ObservableObject {
         readingTask = nil
     }
 
-    private func advanceWord() {
+    private func advanceWord() async {
+        guard isPlaying, !Task.isCancelled else { return }
+
         guard currentWordIndex < words.count - 1 else {
             pause()
             onReadingComplete?()
             return
         }
 
-        // Update chapter index silently (no pause)
-        if let chapter = chapters.first(where: { $0.startWordIndex == currentWordIndex + 1 }) {
-            currentChapterIndex = chapters.firstIndex(where: { $0.id == chapter.id }) ?? currentChapterIndex
+        let nextWordIndex = currentWordIndex + 1
+
+        if (readingMode == .spritz || readingMode == .stream), let titleCard = titleCardByWordIndex[nextWordIndex] {
+            pendingWordIndexAfterTitleCard = nextWordIndex
+            activeTitleCard = titleCard
+            pause()
+            return
         }
 
-        currentWordIndex += 1
+        if isPlaying, paragraphBreathMs > 0 && paragraphEndWordIndexSet.contains(currentWordIndex) {
+            isInParagraphBreath = true
+            do {
+                try await Task.sleep(nanoseconds: UInt64(paragraphBreathMs) * 1_000_000)
+            } catch {
+                isInParagraphBreath = false
+                return
+            }
+            if !isPlaying || Task.isCancelled {
+                isInParagraphBreath = false
+                return
+            }
+            isInParagraphBreath = false
+        }
+
+        // Update chapter index silently (no pause)
+        if let chapter = chapters.first(where: { $0.startWordIndex == nextWordIndex }) {
+            currentChapterIndex = chapters.firstIndex(where: { $0.id == chapter.id }) ?? currentChapterIndex
+            metricsTracker?.recordChapter(chapter.title)
+        }
+
+        currentWordIndex = nextWordIndex
+        metricsTracker?.recordWordAdvance()
+        if nextWordIndex < wordTokenIndexByWordIndex.count {
+            metricsTracker?.recordTokenIndex(wordTokenIndexByWordIndex[nextWordIndex])
+        }
     }
 
     // MARK: - Stream Mode
@@ -208,9 +389,9 @@ class ReadingViewModel: ObservableObject {
     /// Get lines for stream mode - teleprompter style where text flows up
     /// Current line is centered, words appear one at a time on current line
     /// Uses same word wrapping as scan mode for consistency
-    func getStreamLines(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat) -> (lines: [[String]], currentLineIndex: Int, wordIndexInLine: Int) {
+    func getStreamLines(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat) -> (lines: [WrappedLine], currentLineIndex: Int, wordIndexInLine: Int) {
         // Use same line building as scan mode
-        return getLinesForScanMode(screenWidth: screenWidth, fontSize: fontSize, availableHeight: availableHeight)
+        return getWrappedLines(screenWidth: screenWidth, fontSize: fontSize, availableHeight: availableHeight)
     }
 
     // MARK: - Navigation
@@ -227,6 +408,33 @@ class ReadingViewModel: ObservableObject {
         }
     }
 
+    func goToTokenIndex(_ tokenIndex: Int) {
+        let wordIndex = wordIndexFromTokenIndex(tokenIndex)
+        goToWord(at: wordIndex)
+    }
+
+    func goToNextChapter() {
+        guard !chapters.isEmpty else { return }
+        if let nextChapter = chapters.first(where: { $0.startWordIndex > currentWordIndex }) {
+            goToChapter(nextChapter)
+        }
+    }
+
+    func goToPreviousChapter() {
+        guard !chapters.isEmpty else { return }
+        // If we're past the start of the current chapter, go to its start first
+        if let current = chapters.last(where: { $0.startWordIndex <= currentWordIndex }),
+           currentWordIndex > current.startWordIndex + 5 {
+            goToChapter(current)
+            return
+        }
+        // Otherwise go to the previous chapter
+        if let currentIdx = chapters.lastIndex(where: { $0.startWordIndex <= currentWordIndex }),
+           currentIdx > 0 {
+            goToChapter(chapters[currentIdx - 1])
+        }
+    }
+
     func skipForward(words count: Int = 10) {
         let newIndex = min(words.count - 1, currentWordIndex + count)
         goToWord(at: newIndex)
@@ -235,6 +443,41 @@ class ReadingViewModel: ObservableObject {
     func skipBackward(words count: Int = 10) {
         let newIndex = max(0, currentWordIndex - count)
         goToWord(at: newIndex)
+    }
+
+    func rewindToSentenceStart() {
+        pause()
+        guard currentWordIndex > 0 else { return }
+
+        let prevWord = words[currentWordIndex - 1]
+        let atSentenceBoundary = prevWord.hasSuffix(".") || prevWord.hasSuffix("!") || prevWord.hasSuffix("?")
+
+        if atSentenceBoundary {
+            let target = findParagraphStart(from: currentWordIndex - 1)
+            goToWord(at: target)
+        } else {
+            let target = findParagraphStart(from: currentWordIndex)
+            goToWord(at: target)
+        }
+    }
+
+    func forwardToNextSentenceEnd() {
+        pause()
+        guard currentWordIndex < words.count else { return }
+        let target = findParagraphEnd(from: currentWordIndex)
+        goToWord(at: min(target, words.count - 1))
+    }
+
+    func advanceOneWord() {
+        guard currentWordIndex < words.count - 1 else { return }
+        currentWordIndex += 1
+        updateCurrentChapter()
+    }
+
+    func rewindOneWord() {
+        guard currentWordIndex > 0 else { return }
+        currentWordIndex -= 1
+        updateCurrentChapter()
     }
 
     private func updateCurrentChapter() {
@@ -249,6 +492,10 @@ class ReadingViewModel: ObservableObject {
     // MARK: - Settings
     func setSoftStartPercentage(_ percentage: Double) {
         softStartPercentage = max(0.1, min(1.0, percentage))
+    }
+
+    func setParagraphBreathMs(_ ms: Int) {
+        paragraphBreathMs = max(0, min(1000, ms))
     }
 
     // MARK: - ORP Calculation
@@ -277,51 +524,85 @@ class ReadingViewModel: ObservableObject {
     }
 
     // MARK: - Scan Mode Helpers
+
+    struct WrappedLine: Equatable {
+        var words: [String]
+        var isBlank: Bool
+        var blockKind: BlockKind
+
+        static func blank() -> WrappedLine {
+            WrappedLine(words: [], isBlank: true, blockKind: .paragraph)
+        }
+
+        static func text(_ words: [String], kind: BlockKind = .paragraph) -> WrappedLine {
+            WrappedLine(words: words, isBlank: false, blockKind: kind)
+        }
+    }
     
     /// Calculate estimated width of a word in points
-    private func estimateWordWidth(_ word: String, fontSize: CGFloat) -> CGFloat {
-        let charWidth = fontSize * 0.55
-        let spaceWidth = fontSize * 0.3
-        return CGFloat(word.count) * charWidth + spaceWidth
+    private func estimateWordWidth(_ word: String, fontSize: CGFloat, wordSpacing: CGFloat = 0, letterSpacing: CGFloat = 0) -> CGFloat {
+        let charWidth = fontSize * 0.50
+        let trackingPerChar = fontSize * letterSpacing
+        let spaceWidth = fontSize * 0.28
+        let interWordSpacing = fontSize * wordSpacing
+        return CGFloat(word.count) * (charWidth + trackingPerChar) + spaceWidth + interWordSpacing
     }
     
     /// Build lines based on actual word widths to prevent overflow
-    private func buildLinesWithWordWrapping(screenWidth: CGFloat, fontSize: CGFloat) -> [[String]] {
+    private func buildLinesWithWordWrapping(screenWidth: CGFloat, fontSize: CGFloat) -> [WrappedLine] {
         let padding: CGFloat = 48
         let maxLineWidth = screenWidth - padding
         
-        var lines: [[String]] = []
+        var lines: [WrappedLine] = []
         var currentLine: [String] = []
         var currentLineWidth: CGFloat = 0
-        
-        for word in words {
-            let wordWidth = estimateWordWidth(word, fontSize: fontSize)
-            
-            if currentLineWidth + wordWidth > maxLineWidth && !currentLine.isEmpty {
-                // Start new line
-                lines.append(currentLine)
-                currentLine = [word]
-                currentLineWidth = wordWidth
-            } else {
+
+        func flushLineIfNeeded() {
+            guard !currentLine.isEmpty else { return }
+            lines.append(.text(currentLine))
+            currentLine = []
+            currentLineWidth = 0
+        }
+
+        func appendBlankLineIfNeeded() {
+            if lines.last?.isBlank == true { return }
+            lines.append(.blank())
+        }
+
+        for token in tokens {
+            switch token.kind {
+            case .word:
+                let word = token.text
+                let wordWidth = estimateWordWidth(word, fontSize: fontSize)
+
+                if currentLineWidth + wordWidth > maxLineWidth && !currentLine.isEmpty {
+                    flushLineIfNeeded()
+                }
+
                 currentLine.append(word)
                 currentLineWidth += wordWidth
+
+            case .paragraphBreak:
+                flushLineIfNeeded()
+                appendBlankLineIfNeeded()
+
+            default:
+                break
             }
         }
         
         // Don't forget the last line
-        if !currentLine.isEmpty {
-            lines.append(currentLine)
-        }
+        flushLineIfNeeded()
         
         return lines
     }
     
     /// Cache for word-to-line mapping
-    private var cachedLines: [[String]]?
+    private var cachedLines: [WrappedLine]?
     private var cachedScreenWidth: CGFloat = 0
     private var cachedFontSize: CGFloat = 0
     
-    func getLinesForScanMode(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat) -> (lines: [[String]], currentLineIndex: Int, wordIndexInLine: Int) {
+    func getWrappedLines(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat) -> (lines: [WrappedLine], currentLineIndex: Int, wordIndexInLine: Int) {
         // Rebuild lines if parameters changed
         if cachedLines == nil || cachedScreenWidth != screenWidth || cachedFontSize != fontSize {
             cachedLines = buildLinesWithWordWrapping(screenWidth: screenWidth, fontSize: fontSize)
@@ -342,23 +623,129 @@ class ReadingViewModel: ObservableObject {
         var wordIndexInLine = 0
         
         for (lineIndex, line) in allLines.enumerated() {
-            if wordCount + line.count > currentWordIndex {
+            if line.isBlank { continue }
+            if wordCount + line.words.count > currentWordIndex {
                 currentLineNumber = lineIndex
                 wordIndexInLine = currentWordIndex - wordCount
                 break
             }
-            wordCount += line.count
+            wordCount += line.words.count
         }
         
         // Center the current line in the view
         let linesAbove = maxLines / 2
         let startLine = max(0, currentLineNumber - linesAbove)
         let endLine = min(allLines.count, startLine + maxLines)
-        
+
         let visibleLines = Array(allLines[startLine..<endLine])
         let currentLineIndexInArray = currentLineNumber - startLine
-        
+
         return (visibleLines, currentLineIndexInArray, wordIndexInLine)
+    }
+
+    func getAllWrappedLines(screenWidth: CGFloat, fontSize: CGFloat) -> [WrappedLine] {
+        if cachedLines == nil || cachedScreenWidth != screenWidth || cachedFontSize != fontSize {
+            cachedLines = buildLinesWithWordWrapping(screenWidth: screenWidth, fontSize: fontSize)
+            cachedScreenWidth = screenWidth
+            cachedFontSize = fontSize
+        }
+        return cachedLines ?? []
+    }
+
+    func getPausedDisplayLines(
+        screenWidth: CGFloat,
+        fontSize: CGFloat,
+        horizontalPadding: CGFloat = 48,
+        wordSpacing: CGFloat = 0,
+        letterSpacing: CGFloat = 0
+    ) -> (lines: [PausedDisplayLine], currentLineId: Int) {
+        let maxLineWidth = screenWidth - horizontalPadding
+
+        var lines: [PausedDisplayLine] = []
+        lines.reserveCapacity(max(32, words.count / 8))
+
+        var currentLineWords: [PausedWord] = []
+        var currentLineWidth: CGFloat = 0
+        var currentWordCount = 0
+        var currentLineContainsPausedWord = false
+        var pausedLineId: Int = 0
+
+        func flushTextLine() {
+            guard !currentLineWords.isEmpty else { return }
+            let lineId = lines.count
+            lines.append(PausedDisplayLine(id: lineId, kind: .text(currentLineWords)))
+            if currentLineContainsPausedWord {
+                pausedLineId = lineId
+            }
+            currentLineWords = []
+            currentLineWidth = 0
+            currentLineContainsPausedWord = false
+        }
+
+        func appendBlankLine() {
+            let lineId = lines.count
+            lines.append(PausedDisplayLine(id: lineId, kind: .blank))
+        }
+
+        func appendTitleLine(_ title: String, kind: TokenKind) {
+            let lineId = lines.count
+            lines.append(PausedDisplayLine(id: lineId, kind: .title(title, kind)))
+        }
+
+        // Track current block for structural awareness
+        var currentBlockIndex = 0
+        var currentBlockKind: BlockKind = .paragraph
+
+        for token in tokens {
+            // Update block context
+            if token.blockIndex != currentBlockIndex && token.blockIndex < (tokens.last?.blockIndex ?? 0) + 1 {
+                if token.blockIndex < blocks.count {
+                    currentBlockKind = blocks[token.blockIndex].kind
+                }
+                currentBlockIndex = token.blockIndex
+            }
+
+            switch token.kind {
+            case .chapterTitle, .sectionTitle, .epigraph:
+                flushTextLine()
+                appendTitleLine(token.text, kind: token.kind)
+                appendBlankLine()
+
+            case .paragraphBreak:
+                flushTextLine()
+                appendBlankLine()
+
+            case .listBullet:
+                // List bullet is a structural marker — start new line but don't count as word
+                flushTextLine()
+
+            case .imageAlt:
+                flushTextLine()
+                let lineId = lines.count
+                lines.append(PausedDisplayLine(id: lineId, kind: .image(altText: token.text)))
+                appendBlankLine()
+
+            case .word, .footnoteRef:
+                let wordWidth = estimateWordWidth(token.text, fontSize: fontSize, wordSpacing: wordSpacing, letterSpacing: letterSpacing)
+                if currentLineWidth + wordWidth > maxLineWidth && !currentLineWords.isEmpty {
+                    flushTextLine()
+                }
+
+                if currentWordCount == currentWordIndex {
+                    currentLineContainsPausedWord = true
+                }
+
+                currentLineWords.append(PausedWord(wordIndex: currentWordCount, text: token.text))
+                currentLineWidth += wordWidth
+                currentWordCount += 1
+
+            case .punctuation:
+                break
+            }
+        }
+
+        flushTextLine()
+        return (lines, pausedLineId)
     }
     
     /// Invalidate line cache when content changes
@@ -417,29 +804,54 @@ class ReadingViewModel: ObservableObject {
     }
 
     // MARK: - Quick Bookmark (no popup)
-    func quickBookmark() -> Bookmark? {
+    struct BookmarkDraft: Equatable {
+        var text: String
+        var startTokenIndex: Int
+        var endTokenIndex: Int
+    }
+
+    func quickBookmarkDraft() -> BookmarkDraft? {
         guard !words.isEmpty else { return nil }
-        
+
         let paragraphStart = findParagraphStart(from: currentWordIndex)
         let paragraphEnd = findParagraphEnd(from: currentWordIndex)
-        
+
         guard paragraphStart < paragraphEnd, paragraphEnd <= words.count else { return nil }
-        
+
         let text = words[paragraphStart..<paragraphEnd].joined(separator: " ")
-        
-        return Bookmark(
-            bookId: UUID(), // Will be set by caller with actual book ID
+
+        let startTokenIndex: Int = {
+            if paragraphStart >= 0, paragraphStart < wordTokenIndexByWordIndex.count {
+                return wordTokenIndexByWordIndex[paragraphStart]
+            }
+            return paragraphStart
+        }()
+
+        let endTokenIndex: Int = {
+            let lastWordIndex = max(0, min(paragraphEnd - 1, wordTokenIndexByWordIndex.count - 1))
+            if lastWordIndex >= 0, lastWordIndex < wordTokenIndexByWordIndex.count {
+                return wordTokenIndexByWordIndex[lastWordIndex]
+            }
+            return max(0, paragraphEnd - 1)
+        }()
+
+        return BookmarkDraft(
             text: text,
-            startWordIndex: paragraphStart,
-            endWordIndex: paragraphEnd
+            startTokenIndex: startTokenIndex,
+            endTokenIndex: endTokenIndex
         )
     }
     
     // MARK: - Reading Position
-    func getCurrentPosition() -> ReadingPosition {
-        return ReadingPosition(
-            wordIndex: currentWordIndex,
-            chapterIndex: currentChapterIndex,
+    func getCurrentProgress() -> ReadingProgress {
+        let tokenIndex: Int = {
+            if currentWordIndex >= 0, currentWordIndex < wordTokenIndexByWordIndex.count {
+                return wordTokenIndexByWordIndex[currentWordIndex]
+            }
+            return currentWordIndex
+        }()
+        return ReadingProgress(
+            tokenIndex: tokenIndex,
             percentComplete: progress * 100
         )
     }

@@ -4,12 +4,12 @@ struct ImagesView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
-    let bookId: UUID
+    let documentId: UUID
 
     @State private var selectedImageIndex: Int = 0
 
     var images: [SavedImage] {
-        appState.getSavedImages(for: bookId)
+        appState.getSavedImages(for: documentId)
     }
 
     var unseenImages: [SavedImage] {
@@ -71,10 +71,10 @@ struct ImagesView: View {
                 ImageCard(
                     image: image,
                     onBookmark: {
-                        appState.toggleImageBookmark(image.id, bookId: bookId)
+                        appState.toggleImageBookmark(image.id, documentId: documentId)
                     },
                     onMarkSeen: {
-                        appState.markImageAsSeen(image.id, bookId: bookId)
+                        appState.markImageAsSeen(image.id, documentId: documentId)
                     }
                 )
                 .tag(index)
@@ -86,7 +86,7 @@ struct ImagesView: View {
             if newIndex < images.count {
                 let image = images[newIndex]
                 if !image.isSeen {
-                    appState.markImageAsSeen(image.id, bookId: bookId)
+                    appState.markImageAsSeen(image.id, documentId: documentId)
                 }
             }
         }
@@ -149,6 +149,6 @@ struct ImageCard: View {
 }
 
 #Preview {
-    ImagesView(bookId: UUID())
+    ImagesView(documentId: UUID())
         .environmentObject(AppState())
 }

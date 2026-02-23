@@ -3,133 +3,421 @@ import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var readerCoordinator: ReaderCoordinator
+    @EnvironmentObject var authViewModel: AuthViewModel
 
+    @State private var showAccount: Bool = false
     @State private var showFilePicker: Bool = false
-    @State private var searchText: String = ""
+    @State private var showURLInput: Bool = false
+    @State private var articleURL: String = ""
+    @State private var isImporting: Bool = false
+    @State private var importError: String? = nil
+    @State private var sortOption: SortOption = .dateAdded
+    @State private var currentContinuePage: Int? = 0
+    @State private var previewContext: BookPreviewContext? = nil
+    @Namespace private var libraryGlassNamespace
 
-    private var filteredBooks: [Book] {
-        if searchText.isEmpty {
-            return appState.library
-        }
-        return appState.library.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText) ||
-            $0.author.localizedCaseInsensitiveContains(searchText)
+    private let ingestionService = DocumentIngestionService()
+
+    // MARK: - Sort
+
+    enum SortOption: String, CaseIterable {
+        case dateAdded = "Date Added"
+        case title = "Title"
+        case author = "Author"
+        case lastOpened = "Last Opened"
+    }
+
+    // MARK: - Filtered Data
+
+    private var continueItems: [LibraryItem] {
+        appState.library
+            .filter { $0.inferredStatus == .reading }
+            .sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
+    }
+
+    private var allItems: [LibraryItem] {
+        sortedItems(appState.library)
+    }
+
+    private var inProgressItems: [LibraryItem] {
+        appState.library
+            .filter { $0.inferredStatus == .reading }
+            .sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
+    }
+
+    private var completedItems: [LibraryItem] {
+        appState.library
+            .filter { $0.inferredStatus == .completed }
+            .sorted { $0.dateAdded > $1.dateAdded }
+    }
+
+    private var wantToReadItems: [LibraryItem] {
+        appState.library
+            .filter { $0.inferredStatus == .wantToRead }
+            .sorted { $0.dateAdded > $1.dateAdded }
+    }
+
+    private func sortedItems(_ items: [LibraryItem]) -> [LibraryItem] {
+        switch sortOption {
+        case .dateAdded:
+            return items.sorted { $0.dateAdded > $1.dateAdded }
+        case .title:
+            return items.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .author:
+            return items.sorted { ($0.author ?? "") < ($1.author ?? "") }
+        case .lastOpened:
+            return items.sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
         }
     }
 
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(UIColor.systemBackground)
-                    .ignoresSafeArea()
+    // MARK: - Body
 
-                if appState.library.isEmpty {
-                    emptyLibraryView
-                } else {
-                    libraryContent
-                }
-            }
-            .navigationTitle("Library")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showFilePicker = true }) {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-            .searchable(text: $searchText, prompt: "Search books")
-            .fileImporter(
-                isPresented: $showFilePicker,
-                allowedContentTypes: [.epub, .pdf, .plainText],
-                allowsMultipleSelection: false
-            ) { result in
-                handleFileImport(result)
+    var body: some View {
+        ZStack {
+            Color(UIColor.systemBackground)
+                .ignoresSafeArea()
+
+            if appState.library.isEmpty {
+                emptyLibraryView
+            } else {
+                libraryContent
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            await appState.refreshLibraryMetadataFromStoreIfNeeded()
+        }
+        .sheet(isPresented: $showAccount) {
+            AccountView()
+        }
+        .sheet(item: $previewContext) { context in
+            BookPreviewSheet(
+                items: context.items,
+                initialIndex: context.initialIndex
+            )
+            .presentationDragIndicator(.hidden)
+            .presentationCornerRadius(0)
+            .presentationBackground(.clear)
+            .environmentObject(appState)
+            .environmentObject(readerCoordinator)
+        }
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.epub, .pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileImport(result)
+        }
+        .alert("Add Article", isPresented: $showURLInput) {
+            TextField("https://example.com/article", text: $articleURL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) { articleURL = "" }
+            Button("Add") { importArticle() }
+        } message: {
+            Text("Enter the URL of the article you want to save for offline reading.")
+        }
+        .alert("Import Error", isPresented: .constant(importError != nil)) {
+            Button("OK") { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
+        .overlay {
+            if isImporting {
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Importing...")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    .padding(32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.ultraThinMaterial)
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - Header
+
+    private var headerBar: some View {
+        HStack {
+            Text("Library")
+                .font(.hedvigLettersSerif(24))
+            Spacer()
+
+            Menu {
+                Button("Import Book or PDF") { showFilePicker = true }
+                Button("Add Article from URL") { showURLInput = true }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+            }
+            .tint(.primary)
+            .glassStyle(shape: .circle)
+            .conditionalGlassEffectID("importMenu", in: libraryGlassNamespace)
+
+            Menu {
+                ForEach(SortOption.allCases, id: \.self) { option in
+                    Button {
+                        sortOption = option
+                    } label: {
+                        HStack {
+                            Text(option.rawValue)
+                            if sortOption == option { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+            }
+            .tint(.primary)
+            .glassStyle(shape: .circle)
+            .conditionalGlassEffectID("sortMenu", in: libraryGlassNamespace)
+
+            Button { showAccount = true } label: {
+                accountPill
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+
+    private var userInitials: String {
+        guard let name = authViewModel.userProfile?.displayName else { return "?" }
+        let parts = name.split(separator: " ")
+        let initials = parts.prefix(2).compactMap { $0.first }.map(String.init)
+        return initials.joined().uppercased()
+    }
+
+    private var userName: String {
+        authViewModel.userProfile?.displayName ?? "Guest"
+    }
+
+    private var accountPill: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color(hex: "B8860B"))
+                .frame(width: 34, height: 34)
+                .overlay {
+                    Text(userInitials)
+                        .font(.hedvigLettersSerif(11))
+                        .foregroundStyle(.white)
+                }
+
+            Text(userName)
+                .font(.rethinkSans(11, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.trailing, 12)
+        .frame(height: 44)
+        .glassStyle(shape: .pill)
+        .conditionalGlassEffectID("accountPill", in: libraryGlassNamespace)
     }
 
     // MARK: - Empty State
-    private var emptyLibraryView: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "books.vertical")
-                .font(.system(size: 64))
-                .foregroundColor(.gray.opacity(0.5))
 
-            VStack(spacing: 8) {
-                Text("No Books Yet")
+    private var emptyLibraryView: some View {
+        VStack(spacing: 32) {
+            headerBar
+
+            Spacer()
+
+            Image(systemName: "books.vertical")
+                .font(.system(size: 80))
+                .foregroundColor(.gray.opacity(0.4))
+
+            VStack(spacing: 12) {
+                Text("Your Library is Empty")
                     .font(.title2)
                     .fontWeight(.semibold)
 
-                Text("Import an ePub, PDF, or text file to start reading")
+                Text("Import books, PDFs, or save articles\nto start reading")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
 
-            Button(action: { showFilePicker = true }) {
-                Label("Import Book", systemImage: "plus.circle.fill")
-                    .font(.headline)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.primary)
-                    .foregroundColor(Color(UIColor.systemBackground))
-                    .cornerRadius(12)
+            VStack(spacing: 12) {
+                Button(action: { showFilePicker = true }) {
+                    Label("Import Book or PDF", systemImage: "doc.badge.plus")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.primary)
+                        .foregroundColor(Color(UIColor.systemBackground))
+                        .cornerRadius(12)
+                }
+
+                Button(action: { showURLInput = true }) {
+                    Label("Add Article from URL", systemImage: "link.badge.plus")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.gray.opacity(0.15))
+                        .foregroundColor(.primary)
+                        .cornerRadius(12)
+                }
             }
+            .padding(.horizontal, 40)
+
+            Spacer()
         }
-        .padding()
     }
 
     // MARK: - Library Content
+
     private var libraryContent: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(filteredBooks) { book in
-                    BookRow(book: book)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                appState.deleteBook(book)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 28) {
+                headerBar
+
+                // Continue pager
+                if !continueItems.isEmpty {
+                    continuePagerSection
+                }
+
+                // Shelf sections
+                coverShelfSection(title: "All", items: allItems)
+
+                if !inProgressItems.isEmpty {
+                    coverShelfSection(title: "In Progress", items: inProgressItems)
+                }
+
+                if !completedItems.isEmpty {
+                    coverShelfSection(title: "Completed", items: completedItems)
+                }
+
+                if !wantToReadItems.isEmpty {
+                    coverShelfSection(title: "Want to Read", items: wantToReadItems)
                 }
             }
-            .padding(.vertical)
+            .padding(.vertical, 8)
         }
     }
 
+    // MARK: - Continue Pager
+
+    private var continuePagerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Continue")
+                .font(.hedvigLettersSerif(20))
+                .padding(.horizontal, 20)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 0) {
+                    ForEach(Array(continueItems.enumerated()), id: \.element.id) { index, item in
+                        ContinueCard(item: item, appState: appState)
+                            .padding(.horizontal, 20)
+                            .containerRelativeFrame(.horizontal)
+                            .onTapGesture {
+                                readerCoordinator.openItem(item, appState: appState)
+                            }
+                            .id(index)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $currentContinuePage)
+
+            if continueItems.count > 1 {
+                HStack(spacing: 8) {
+                    ForEach(0..<continueItems.count, id: \.self) { index in
+                        Circle()
+                            .fill(index == currentContinuePage ? Color.primary : Color.secondary.opacity(0.3))
+                            .frame(width: 7, height: 7)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: - Cover Shelf Section
+
+    private func coverShelfSection(title: String, items: [LibraryItem]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.hedvigLettersSerif(20))
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 20)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(items) { item in
+                        libraryCoverCard(item: item)
+                            .onTapGesture {
+                                if let idx = items.firstIndex(where: { $0.id == item.id }) {
+                                    previewContext = BookPreviewContext(items: items, initialIndex: idx)
+                                }
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    appState.deleteItem(item)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                    }
+                }
+                .padding(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
+            }
+        }
+    }
+
+    // MARK: - Cover Card
+
+    private func libraryCoverCard(item: LibraryItem) -> some View {
+        BookCoverView(
+            coverImageData: appState.getCoverImage(for: item.documentId),
+            title: item.title,
+            iconName: item.coverIconName,
+            ribbonState: item.ribbonState
+        )
+        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+    }
+
     // MARK: - File Import
+
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
 
-            // Start accessing security-scoped resource
             guard url.startAccessingSecurityScopedResource() else { return }
             defer { url.stopAccessingSecurityScopedResource() }
 
-            // Determine file type
-            let fileType: Book.FileType
+            let fileType: DocumentSource.LocalFileType
             let pathExtension = url.pathExtension.lowercased()
             switch pathExtension {
             case "epub":
                 fileType = .epub
             case "pdf":
                 fileType = .pdf
-            case "txt":
-                fileType = .txt
             default:
+                importError = "Unsupported file type. Please import an EPUB or PDF."
                 return
             }
 
-            // Copy file to app's documents directory
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let destinationURL = documentsPath.appendingPathComponent(url.lastPathComponent)
 
@@ -139,113 +427,87 @@ struct LibraryView: View {
                 }
                 try FileManager.default.copyItem(at: url, to: destinationURL)
 
-                // Create book entry
-                let book = Book(
-                    title: url.deletingPathExtension().lastPathComponent,
-                    filePath: destinationURL.path,
-                    fileType: fileType
-                )
+                isImporting = true
+                Task {
+                    defer {
+                        Task { @MainActor in isImporting = false }
+                    }
 
-                appState.addBook(book)
+                    let documentId = UUID()
+                    do {
+                        let source = DocumentSource.localFile(.init(url: destinationURL, fileType: fileType))
+                        let packages = try await ingestionService.ingestCanonicalPackages(
+                            source: source,
+                            documentId: documentId
+                        )
+
+                        let item = LibraryItem(
+                            documentId: documentId,
+                            source: .localFile(.init(fileURL: destinationURL, fileType: fileType)),
+                            title: packages.manifest.title,
+                            author: packages.manifest.authors.first
+                        )
+
+                        await MainActor.run {
+                            appState.addItem(item)
+                        }
+                    } catch {
+                        await MainActor.run {
+                            importError = "Failed to import file: \(error.localizedDescription)"
+                        }
+                    }
+                }
             } catch {
-                print("Error importing file: \(error)")
+                importError = "Failed to copy file: \(error.localizedDescription)"
             }
 
         case .failure(let error):
-            print("File picker error: \(error)")
+            importError = "File picker error: \(error.localizedDescription)"
         }
     }
-}
 
-struct BookRow: View {
-    let book: Book
-    @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) private var dismiss
+    // MARK: - Article Import
 
-    var body: some View {
-        Button(action: selectBook) {
-            HStack(spacing: 16) {
-                // Cover image or placeholder
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.gray.opacity(0.1))
+    private func importArticle() {
+        guard let url = URL(string: articleURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme == "http" || url.scheme == "https" else {
+            importError = "Please enter a valid URL starting with http:// or https://"
+            articleURL = ""
+            return
+        }
 
-                    if let coverData = appState.getCoverImage(for: book.id),
-                       let uiImage = UIImage(data: coverData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                    } else if let coverData = book.coverImageData,
-                              let uiImage = UIImage(data: coverData) {
-                        // Fallback to legacy cover data if not migrated yet
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Image(systemName: "book.closed")
-                            .font(.system(size: 24))
-                            .foregroundColor(.gray.opacity(0.5))
-                    }
-                }
-                .frame(width: 60, height: 80)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+        isImporting = true
+        articleURL = ""
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(book.title)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-
-                    Text(book.author)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    HStack(spacing: 8) {
-                        // Progress
-                        if book.lastReadPosition.percentComplete > 0 {
-                            Text("\(Int(book.lastReadPosition.percentComplete))%")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        // File type badge
-                        Text(book.fileType.rawValue.uppercased())
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.gray.opacity(0.2))
-                            .cornerRadius(4)
-                    }
-                }
-
-                Spacer()
-
-                // Last opened indicator
-                if let lastOpened = book.lastOpened {
-                    VStack(alignment: .trailing) {
-                        Text(lastOpened, style: .relative)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.gray)
+        Task {
+            defer {
+                Task { @MainActor in isImporting = false }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+
+            let documentId = UUID()
+            do {
+                let source = DocumentSource.web(.init(url: url))
+                let packages = try await ingestionService.ingestCanonicalPackages(
+                    source: source,
+                    documentId: documentId
+                )
+
+                let item = LibraryItem(
+                    documentId: documentId,
+                    source: .web(.init(url: url, lastRefreshedAt: Date())),
+                    title: packages.manifest.title,
+                    author: packages.manifest.authors.first
+                )
+
+                await MainActor.run {
+                    appState.addItem(item)
+                }
+            } catch {
+                await MainActor.run {
+                    importError = "Failed to import article: \(error.localizedDescription)"
+                }
+            }
         }
-        .buttonStyle(.plain)
-
-        Divider()
-            .padding(.leading, 96)
-    }
-
-    private func selectBook() {
-        appState.currentBook = book
-        dismiss()
     }
 }
 
@@ -255,6 +517,9 @@ extension UTType {
 }
 
 #Preview {
-    LibraryView()
-        .environmentObject(AppState())
+    NavigationStack {
+        LibraryView()
+            .environmentObject(AppState())
+            .environmentObject(ReaderCoordinator())
+    }
 }

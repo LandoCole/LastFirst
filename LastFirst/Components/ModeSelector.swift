@@ -4,7 +4,7 @@ struct ModeSelector: View {
     @Binding var selectedMode: ReadingMode
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             ForEach(ReadingMode.allCases, id: \.self) { mode in
                 let isSelected = mode == selectedMode
 
@@ -13,30 +13,23 @@ struct ModeSelector: View {
                         selectedMode = mode
                     }
                 }) {
-                    Text(mode.displayName)
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                        .foregroundColor(isSelected ? .primary : .secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? Color.primary.opacity(0.1) : Color.clear)
-                        )
+                    VStack(spacing: 4) {
+                        Text(mode.displayName)
+                            .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                            .foregroundColor(isSelected ? .primary : .secondary)
+
+                        Circle()
+                            .fill(isSelected ? Color.primary : Color.clear)
+                            .frame(width: 4, height: 4)
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
                 }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private func iconName(for mode: ReadingMode) -> String {
-        switch mode {
-        case .spritz:
-            return "bolt.fill"
-        case .stream:
-            return "text.justify.left"
-        case .scan:
-            return "eye.fill"
-        }
-    }
 }
 
 #Preview("Mode Selector") {

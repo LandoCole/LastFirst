@@ -70,10 +70,12 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testLoadContent_setsWordsCorrectly() {
         let words = ["The", "quick", "brown", "fox"]
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
         let chapters: [Chapter] = []
-        let position = ReadingPosition(wordIndex: 0)
         
-        viewModel.loadContent(words: words, chapters: chapters, startPosition: position)
+        viewModel.loadContent(tokens: tokens, chapters: chapters, startTokenIndex: 0)
         
         XCTAssertEqual(viewModel.words.count, 4)
         XCTAssertEqual(viewModel.currentWord, "The")
@@ -81,9 +83,11 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testLoadContent_setsStartPosition() {
         let words = ["The", "quick", "brown", "fox"]
-        let position = ReadingPosition(wordIndex: 2)
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
         
-        viewModel.loadContent(words: words, chapters: [], startPosition: position)
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 2)
         
         XCTAssertEqual(viewModel.currentWordIndex, 2)
         XCTAssertEqual(viewModel.currentWord, "brown")
@@ -93,20 +97,26 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testProgress_atStart() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 0)
         
         XCTAssertEqual(viewModel.progress, 0.0)
     }
     
     func testProgress_atMiddle() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 2))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 2)
         
         XCTAssertEqual(viewModel.progress, 0.5)
     }
     
     func testProgress_emptyContent() {
-        viewModel.loadContent(words: [], chapters: [], startPosition: ReadingPosition(wordIndex: 0))
+        viewModel.loadContent(tokens: [], chapters: [], startTokenIndex: 0)
         
         XCTAssertEqual(viewModel.progress, 0.0)
     }
@@ -115,7 +125,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testGoToWord_validIndex() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 0))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 0)
         
         viewModel.goToWord(at: 2)
         
@@ -125,7 +138,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testGoToWord_invalidNegativeIndex() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 1))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 1)
         
         viewModel.goToWord(at: -1)
         
@@ -135,7 +151,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testGoToWord_invalidLargeIndex() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 1))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 1)
         
         viewModel.goToWord(at: 100)
         
@@ -145,7 +164,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testSkipForward() {
         let words = Array(repeating: "word", count: 20)
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 5))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 5)
         
         viewModel.skipForward(words: 3)
         
@@ -154,7 +176,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testSkipForward_clampsToEnd() {
         let words = Array(repeating: "word", count: 10)
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 8))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 8)
         
         viewModel.skipForward(words: 10)
         
@@ -163,7 +188,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testSkipBackward() {
         let words = Array(repeating: "word", count: 20)
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 10))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 10)
         
         viewModel.skipBackward(words: 3)
         
@@ -172,7 +200,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testSkipBackward_clampsToStart() {
         let words = Array(repeating: "word", count: 10)
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 2))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 2)
         
         viewModel.skipBackward(words: 10)
         
@@ -187,7 +218,7 @@ final class ReadingViewModelTests: XCTestCase {
     }
     
     func testPlay_withEmptyContent_doesNotStart() {
-        viewModel.loadContent(words: [], chapters: [], startPosition: ReadingPosition())
+        viewModel.loadContent(tokens: [], chapters: [], startTokenIndex: 0)
         
         viewModel.play()
         
@@ -196,7 +227,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testPlay_withContent_startsPlaying() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition())
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 0)
         
         viewModel.play()
         
@@ -209,7 +243,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testPause_stopsPlaying() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition())
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 0)
         
         viewModel.play()
         viewModel.pause()
@@ -220,7 +257,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testStop_resetsToBeginning() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 2))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 2)
         
         viewModel.play()
         viewModel.stop()
@@ -234,7 +274,10 @@ final class ReadingViewModelTests: XCTestCase {
     
     func testStartBookmarkCreation_pausesPlayback() {
         let words = ["The", "quick", "brown", "fox"]
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition())
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 0)
         
         viewModel.play()
         viewModel.startBookmarkCreation()
@@ -252,13 +295,16 @@ final class ReadingViewModelTests: XCTestCase {
     
     // MARK: - Reading Position Tests
     
-    func testGetCurrentPosition() {
+    func testGetCurrentProgress() {
         let words = Array(repeating: "word", count: 100)
-        viewModel.loadContent(words: words, chapters: [], startPosition: ReadingPosition(wordIndex: 50))
+        let tokens = words.enumerated().map { idx, w in
+            Token(id: idx, text: w, kind: .word, blockIndex: 0, sentenceIndex: 0, sourceLocation: nil)
+        }
+        viewModel.loadContent(tokens: tokens, chapters: [], startTokenIndex: 50)
         
-        let position = viewModel.getCurrentPosition()
+        let progress = viewModel.getCurrentProgress()
         
-        XCTAssertEqual(position.wordIndex, 50)
-        XCTAssertEqual(position.percentComplete, 50.0)
+        XCTAssertEqual(progress.tokenIndex, 50)
+        XCTAssertEqual(progress.percentComplete, 50.0)
     }
 }

@@ -2,7 +2,7 @@ import Foundation
 
 struct Bookmark: Identifiable, Codable {
     let id: UUID
-    var bookId: UUID
+    var documentId: UUID
     var title: String?
     var text: String
     var startWordIndex: Int
@@ -12,7 +12,7 @@ struct Bookmark: Identifiable, Codable {
 
     init(
         id: UUID = UUID(),
-        bookId: UUID,
+        documentId: UUID,
         title: String? = nil,
         text: String,
         startWordIndex: Int,
@@ -21,7 +21,7 @@ struct Bookmark: Identifiable, Codable {
         note: String? = nil
     ) {
         self.id = id
-        self.bookId = bookId
+        self.documentId = documentId
         self.title = title
         self.text = text
         self.startWordIndex = startWordIndex
@@ -33,7 +33,7 @@ struct Bookmark: Identifiable, Codable {
 
 struct SavedImage: Identifiable, Codable {
     let id: UUID
-    var bookId: UUID
+    var documentId: UUID
     var imageData: Data
     var pageIndex: Int
     var wordIndex: Int
@@ -43,7 +43,7 @@ struct SavedImage: Identifiable, Codable {
 
     init(
         id: UUID = UUID(),
-        bookId: UUID,
+        documentId: UUID,
         imageData: Data,
         pageIndex: Int,
         wordIndex: Int,
@@ -52,7 +52,7 @@ struct SavedImage: Identifiable, Codable {
         dateFound: Date = Date()
     ) {
         self.id = id
-        self.bookId = bookId
+        self.documentId = documentId
         self.imageData = imageData
         self.pageIndex = pageIndex
         self.wordIndex = wordIndex
@@ -64,7 +64,7 @@ struct SavedImage: Identifiable, Codable {
 
 struct SavedImageMetadata: Identifiable, Codable {
     let id: UUID
-    var bookId: UUID
+    var documentId: UUID
     var pageIndex: Int
     var wordIndex: Int
     var isSeen: Bool
@@ -73,7 +73,7 @@ struct SavedImageMetadata: Identifiable, Codable {
 
     init(
         id: UUID = UUID(),
-        bookId: UUID,
+        documentId: UUID,
         pageIndex: Int,
         wordIndex: Int,
         isSeen: Bool = false,
@@ -81,7 +81,7 @@ struct SavedImageMetadata: Identifiable, Codable {
         dateFound: Date = Date()
     ) {
         self.id = id
-        self.bookId = bookId
+        self.documentId = documentId
         self.pageIndex = pageIndex
         self.wordIndex = wordIndex
         self.isSeen = isSeen
@@ -92,7 +92,7 @@ struct SavedImageMetadata: Identifiable, Codable {
 
 struct Footnote: Identifiable, Codable {
     let id: UUID
-    var bookId: UUID
+    var documentId: UUID
     var indicator: String
     var content: String
     var wordIndex: Int
@@ -101,7 +101,7 @@ struct Footnote: Identifiable, Codable {
 
     init(
         id: UUID = UUID(),
-        bookId: UUID,
+        documentId: UUID,
         indicator: String,
         content: String,
         wordIndex: Int,
@@ -109,7 +109,7 @@ struct Footnote: Identifiable, Codable {
         dateFound: Date = Date()
     ) {
         self.id = id
-        self.bookId = bookId
+        self.documentId = documentId
         self.indicator = indicator
         self.content = content
         self.wordIndex = wordIndex

@@ -7,61 +7,172 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1580C25E9410EB124DF9463C /* BookContentManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED8273D9D32A7659E168999 /* BookContentManager.swift */; };
+		0A7AD5E804E454FEBBC8885A /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85F947CF50A07FC486E5D83 /* SplashView.swift */; };
+		18C83E049EA05734C23756D4 /* ReadingMetricsSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DC6D992EF31B637ED9502C /* ReadingMetricsSyncService.swift */; };
+		3174C987A530025625D94F04 /* SignupInterestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2DC33DC1B786A05E662830E /* SignupInterestsView.swift */; };
+		368655AC770C84B41F8F24E2 /* ReadingStatsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7FCCEBA36A1B2CB63DD6911 /* ReadingStatsSheet.swift */; };
+		3A6A52B4849B757233C4A137 /* ProgressScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8190327746E57504C831F2F8 /* ProgressScrubber.swift */; };
+		3DB8FB2FEBFDABA71D81AECB /* LiquidGlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9807B97320BE41A43686A4A3 /* LiquidGlassStyle.swift */; };
+		44C3ADE49E358B27D7C96FAA /* SignupPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EAC76F50B411C46DAD90FD0 /* SignupPasswordView.swift */; };
+		44CB00732A966413E3FC5B5B /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32AF24ED35D01AC1B4D93F08 /* BookCoverView.swift */; };
+		475E339186C8C25CEAFD6001 /* BookCoverRibbon.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */; };
+		4D0EA37BA2FE4E53EB6DAB8E /* FootnotePopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B6670672B4C19B12808860B /* FootnotePopoverView.swift */; };
+		5CB0E9ED2409A42BF1A68333 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B1B9D9605C603338C590B7 /* BookmarksView.swift */; };
+		6394598283EABF385D69D51A /* CatalogItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */; };
+		79AE94645E4495862C8DD4F4 /* BookPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B79FE2F0FCDEA03372EDB9 /* BookPreviewSheet.swift */; };
 		7FF3D9EBCAC2E70B2636F1C1 /* ImageStorageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78CD274DC01D6AC981558AE8 /* ImageStorageManager.swift */; };
+		88F4343FDBE20122116C7187 /* EPUBStructuralParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F670EBB6E8B4C4F9A379B87 /* EPUBStructuralParser.swift */; };
+		909DEAD110048BAA981C9359 /* ReadingStatsCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751CE5A5DC0DEF82AD893E20 /* ReadingStatsCache.swift */; };
+		9452E6ACE4583F201326B955 /* CuratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B060B4DB4FFCF0350DFE7FBE /* CuratorView.swift */; };
+		9626AABBA5F964B93A2CDEFB /* ReadingSessionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA827DF40620834DD1744F2 /* ReadingSessionRecord.swift */; };
+		9B6D8294E65B4DC85188938F /* ContinueCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D92A85F50F3F1FD4ED298D /* ContinueCard.swift */; };
+		9C623CC327E90941FE66C903 /* SignupNicknameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B10AA5399D5BEFA3508E475 /* SignupNicknameView.swift */; };
 		A1000001 /* LastFirstApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* LastFirstApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* ReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* ReadingView.swift */; };
 		A1000004 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* LibraryView.swift */; };
-		A1000005 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* SettingsView.swift */; };
-		A1000006 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* BookmarksView.swift */; };
 		A1000007 /* ImagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* ImagesView.swift */; };
-		A1000008 /* SpeedDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* SpeedDial.swift */; };
 		A1000009 /* SpritzModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* SpritzModeView.swift */; };
 		A1000010 /* StreamModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* StreamModeView.swift */; };
-		A1000011 /* ScanModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* ScanModeView.swift */; };
-		A1000012 /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012 /* Book.swift */; };
 		A1000013 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* Settings.swift */; };
 		A1000014 /* Bookmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* Bookmark.swift */; };
 		A1000015 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* AppState.swift */; };
 		A1000016 /* ReadingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000016 /* ReadingViewModel.swift */; };
-		A1000017 /* DocumentParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000017 /* DocumentParser.swift */; };
 		A1000018 /* ColorExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000018 /* ColorExtensions.swift */; };
 		A1000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000019 /* Assets.xcassets */; };
-		A1000020 /* PausedScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* PausedScrollView.swift */; };
+		A1000020 /* ReaderScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* ReaderScrollView.swift */; };
 		A1000022 /* ModeSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* ModeSelector.swift */; };
-		A1000024 /* CollapsedDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024 /* CollapsedDial.swift */; };
 		A1000025 /* ArtifactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* ArtifactsView.swift */; };
+		A22810AD1FEEDF0AFF96C908 /* FullTextSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA7F1AAE88E64C7D37119FD /* FullTextSearchService.swift */; };
+		A87919DC17DC9B44ABE80E2C /* SearchOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDC318EDE1CBA909EF9971A7 /* SearchOverlayView.swift */; };
+		AA7E8F66547A3D1C5B0C16D6 /* CatalogViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37FFC587B0D57E5033E3775F /* CatalogViewModel.swift */; };
+		AB136B8858CA3132FE83649C /* ReadingStatsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C664E10E1D6FFBCFD1EDDC /* ReadingStatsViewModel.swift */; };
+		ACD53CC0BE04D469303667F9 /* ReadingStatsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3F441533B88BFD778E24768 /* ReadingStatsSection.swift */; };
+		ACF44C72788FB4A065FF78F0 /* LoginPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB66A295D1BD5570393EA479 /* LoginPasswordView.swift */; };
+		B1000001 /* ReaderDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001 /* ReaderDocument.swift */; };
+		B1000002 /* LibraryItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002 /* LibraryItem.swift */; };
+		B1000003 /* DocumentIngestionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000003 /* DocumentIngestionService.swift */; };
+		B1000005 /* PDFOCRTextExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000005 /* PDFOCRTextExtractor.swift */; };
+		B77BBA3ABDF654451DEFF27F /* ReadingSessionDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB31C9E400CC3B074C04CC4E /* ReadingSessionDTO.swift */; };
+		B834C6ACBB924673CC2071A6 /* EPUBMetadataExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1551CE79D8650FF66AD58E0 /* EPUBMetadataExtractor.swift */; };
+		BAB0EB2DB90F3F5A5C59533D /* ReaderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268BADCF918AD66D25D8542F /* ReaderCoordinator.swift */; };
+		C0F1A2B3C4D5061728394A5F /* EPUBKit in Frameworks */ = {isa = PBXBuildFile; productRef = C0C1D2E3F4A5061728394A5C /* EPUBKit */; };
+		C101B2C3D4E5061728394A60 /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = C0D1E2F3A4B5061728394A5D /* Readability */; };
+		C102C3D4E5F6061728394A61 /* ReadabilityUI in Frameworks */ = {isa = PBXBuildFile; productRef = C0E1F2A3B4C5061728394A5E /* ReadabilityUI */; };
+		C31A0013EBCF5B4136C0DFC8 /* MiniReaderBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 531EBD32CE4A61CF5799A87E /* MiniReaderBar.swift */; };
+		C3A1B2D0E4F56789ABCD0001 /* ViewExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A1B2D0E4F56789ABCD0002 /* ViewExtensions.swift */; };
+		C8B77E81110E8FFB757F72FD /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9425245464C7B7CA96550A1D /* HomeView.swift */; };
+		D2A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift */; };
+		D2B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift */; };
+		D2C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift */; };
+		D2F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift */; };
+		D2F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift */; };
+		D3000001 /* ReaderTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3100001 /* ReaderTheme.swift */; };
+		D3000002 /* ThemesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3100002 /* ThemesSettingsView.swift */; };
+		D3605C7DC4CF3FDFD031D628 /* CatalogPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C8E61353C203694132FEF /* CatalogPreviewSheet.swift */; };
+		D3C273622F43CE4600704D02 /* RethinkSans-VariableFont.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3C2735E2F43CE4600704D02 /* RethinkSans-VariableFont.ttf */; };
+		D3C273632F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3C2735F2F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf */; };
+		D3C273642F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3C273602F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf */; };
+		D5000001 /* LiquidGlassTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4000001 /* LiquidGlassTestView.swift */; };
+		D5000002 /* LiquidGlassSpeedDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4000002 /* LiquidGlassSpeedDial.swift */; };
+		D5000003 /* RotaryDialGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4000003 /* RotaryDialGesture.swift */; };
+		D6882B035374E011F7B7212E /* ReadingMetricsTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C51A56B15550EF357661B0 /* ReadingMetricsTracker.swift */; };
+		D6F6D7E6203ABB2509767E75 /* GlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429ECC18700A57FDDC15EA8F /* GlobalSearchView.swift */; };
+		E1000001 /* SupabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000001 /* SupabaseManager.swift */; };
+		E1000002 /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000002 /* Profile.swift */; };
+		E1000003 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000003 /* AuthViewModel.swift */; };
+		E1000004 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000004 /* AuthView.swift */; };
+		E1000005 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000005 /* AccountView.swift */; };
+		E1000006 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = E3000001 /* Supabase */; };
+		EA07D4E60B430898A5166873 /* CatalogCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F4237EB4C8C567E698046E /* CatalogCoverView.swift */; };
+		F2A5A084096D55401DF6DB52 /* NavigationTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E5232222ECDC75EF37CCB1B /* NavigationTab.swift */; };
+		F565B2523D63F395807FF79A /* TOCSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209CD3A36DF73BF4A7605DDB /* TOCSheetView.swift */; };
+		F7000001 /* Fonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000001 /* Fonts.swift */; };
+		F7000002 /* SignupEmailConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000002 /* SignupEmailConfirmationView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0ED8273D9D32A7659E168999 /* BookContentManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BookContentManager.swift; path = BookContentManager.swift; sourceTree = "<group>"; };
-		78CD274DC01D6AC981558AE8 /* ImageStorageManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ImageStorageManager.swift; path = ImageStorageManager.swift; sourceTree = "<group>"; };
+		0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogItem.swift; sourceTree = "<group>"; };
+		1B6670672B4C19B12808860B /* FootnotePopoverView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FootnotePopoverView.swift; sourceTree = "<group>"; };
+		1E5232222ECDC75EF37CCB1B /* NavigationTab.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NavigationTab.swift; sourceTree = "<group>"; };
+		209CD3A36DF73BF4A7605DDB /* TOCSheetView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TOCSheetView.swift; sourceTree = "<group>"; };
+		268BADCF918AD66D25D8542F /* ReaderCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReaderCoordinator.swift; sourceTree = "<group>"; };
+		32AF24ED35D01AC1B4D93F08 /* BookCoverView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookCoverView.swift; sourceTree = "<group>"; };
+		33C664E10E1D6FFBCFD1EDDC /* ReadingStatsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingStatsViewModel.swift; sourceTree = "<group>"; };
+		37FFC587B0D57E5033E3775F /* CatalogViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogViewModel.swift; sourceTree = "<group>"; };
+		38C51A56B15550EF357661B0 /* ReadingMetricsTracker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingMetricsTracker.swift; sourceTree = "<group>"; };
+		429ECC18700A57FDDC15EA8F /* GlobalSearchView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalSearchView.swift; sourceTree = "<group>"; };
+		531EBD32CE4A61CF5799A87E /* MiniReaderBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MiniReaderBar.swift; sourceTree = "<group>"; };
+		6EAC76F50B411C46DAD90FD0 /* SignupPasswordView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignupPasswordView.swift; sourceTree = "<group>"; };
+		751CE5A5DC0DEF82AD893E20 /* ReadingStatsCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingStatsCache.swift; sourceTree = "<group>"; };
+		78CD274DC01D6AC981558AE8 /* ImageStorageManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageStorageManager.swift; sourceTree = "<group>"; };
+		7B10AA5399D5BEFA3508E475 /* SignupNicknameView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignupNicknameView.swift; sourceTree = "<group>"; };
+		8190327746E57504C831F2F8 /* ProgressScrubber.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProgressScrubber.swift; sourceTree = "<group>"; };
+		8F670EBB6E8B4C4F9A379B87 /* EPUBStructuralParser.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EPUBStructuralParser.swift; sourceTree = "<group>"; };
+		9425245464C7B7CA96550A1D /* HomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		97B1B9D9605C603338C590B7 /* BookmarksView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookmarksView.swift; sourceTree = "<group>"; };
+		9807B97320BE41A43686A4A3 /* LiquidGlassStyle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiquidGlassStyle.swift; sourceTree = "<group>"; };
+		980C8E61353C203694132FEF /* CatalogPreviewSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogPreviewSheet.swift; sourceTree = "<group>"; };
 		A2000000 /* LastFirst.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LastFirst.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001 /* LastFirstApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastFirstApp.swift; sourceTree = "<group>"; };
 		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2000003 /* ReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingView.swift; sourceTree = "<group>"; };
 		A2000004 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
-		A2000005 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		A2000006 /* BookmarksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksView.swift; sourceTree = "<group>"; };
 		A2000007 /* ImagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagesView.swift; sourceTree = "<group>"; };
-		A2000008 /* SpeedDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedDial.swift; sourceTree = "<group>"; };
 		A2000009 /* SpritzModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpritzModeView.swift; sourceTree = "<group>"; };
 		A2000010 /* StreamModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamModeView.swift; sourceTree = "<group>"; };
-		A2000011 /* ScanModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanModeView.swift; sourceTree = "<group>"; };
-		A2000012 /* Book.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Book.swift; sourceTree = "<group>"; };
 		A2000013 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		A2000014 /* Bookmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bookmark.swift; sourceTree = "<group>"; };
 		A2000015 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		A2000016 /* ReadingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingViewModel.swift; sourceTree = "<group>"; };
-		A2000017 /* DocumentParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentParser.swift; sourceTree = "<group>"; };
 		A2000018 /* ColorExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorExtensions.swift; sourceTree = "<group>"; };
 		A2000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A2000021 /* PausedScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PausedScrollView.swift; sourceTree = "<group>"; };
+		A2000021 /* ReaderScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderScrollView.swift; sourceTree = "<group>"; };
 		A2000022 /* ModeSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSelector.swift; sourceTree = "<group>"; };
-		A2000024 /* CollapsedDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollapsedDial.swift; sourceTree = "<group>"; };
 		A2000025 /* ArtifactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtifactsView.swift; sourceTree = "<group>"; };
+		A3F441533B88BFD778E24768 /* ReadingStatsSection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingStatsSection.swift; sourceTree = "<group>"; };
+		A7D92A85F50F3F1FD4ED298D /* ContinueCard.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContinueCard.swift; sourceTree = "<group>"; };
+		A85F947CF50A07FC486E5D83 /* SplashView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
+		AB66A295D1BD5570393EA479 /* LoginPasswordView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoginPasswordView.swift; sourceTree = "<group>"; };
+		B060B4DB4FFCF0350DFE7FBE /* CuratorView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CuratorView.swift; sourceTree = "<group>"; };
+		B2000001 /* ReaderDocument.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReaderDocument.swift; sourceTree = "<group>"; };
+		B2000002 /* LibraryItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LibraryItem.swift; sourceTree = "<group>"; };
+		B2000003 /* DocumentIngestionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentIngestionService.swift; sourceTree = "<group>"; };
+		B2000005 /* PDFOCRTextExtractor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PDFOCRTextExtractor.swift; sourceTree = "<group>"; };
+		B2DC33DC1B786A05E662830E /* SignupInterestsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignupInterestsView.swift; sourceTree = "<group>"; };
+		BDA7F1AAE88E64C7D37119FD /* FullTextSearchService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FullTextSearchService.swift; sourceTree = "<group>"; };
+		C1F4237EB4C8C567E698046E /* CatalogCoverView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogCoverView.swift; sourceTree = "<group>"; };
+		C3A1B2D0E4F56789ABCD0002 /* ViewExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewExtensions.swift; sourceTree = "<group>"; };
+		D1A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentStoreActor.swift; sourceTree = "<group>"; };
+		D1B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ResourceCacheActor.swift; sourceTree = "<group>"; };
+		D1C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParsingCoordinatorActor.swift; sourceTree = "<group>"; };
+		D1F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CanonicalParsingService.swift; sourceTree = "<group>"; };
+		D1F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CanonicalDocumentAdapter.swift; sourceTree = "<group>"; };
+		D3100001 /* ReaderTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReaderTheme.swift; sourceTree = "<group>"; };
+		D3100002 /* ThemesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemesSettingsView.swift; sourceTree = "<group>"; };
+		D3C2735E2F43CE4600704D02 /* RethinkSans-VariableFont.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "RethinkSans-VariableFont.ttf"; sourceTree = "<group>"; };
+		D3C2735F2F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "RethinkSans-Italic-VariableFont.ttf"; sourceTree = "<group>"; };
+		D3C273602F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "HedvigLettersSerif-VariableFont.ttf"; sourceTree = "<group>"; };
+		D4000001 /* LiquidGlassTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassTestView.swift; sourceTree = "<group>"; };
+		D4000002 /* LiquidGlassSpeedDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassSpeedDial.swift; sourceTree = "<group>"; };
+		D4000003 /* RotaryDialGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RotaryDialGesture.swift; sourceTree = "<group>"; };
+		D9DC6D992EF31B637ED9502C /* ReadingMetricsSyncService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingMetricsSyncService.swift; sourceTree = "<group>"; };
+		DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookCoverRibbon.swift; sourceTree = "<group>"; };
+		E1B79FE2F0FCDEA03372EDB9 /* BookPreviewSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookPreviewSheet.swift; sourceTree = "<group>"; };
+		E2000001 /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
+		E2000002 /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
+		E2000003 /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
+		E2000004 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
+		E2000005 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+		E2000006 /* Supabase.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Supabase.xcconfig; path = Config/Supabase.xcconfig; sourceTree = "<group>"; };
+		E7FCCEBA36A1B2CB63DD6911 /* ReadingStatsSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingStatsSheet.swift; sourceTree = "<group>"; };
+		EDC318EDE1CBA909EF9971A7 /* SearchOverlayView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SearchOverlayView.swift; sourceTree = "<group>"; };
+		F1551CE79D8650FF66AD58E0 /* EPUBMetadataExtractor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EPUBMetadataExtractor.swift; sourceTree = "<group>"; };
+		F8000001 /* Fonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fonts.swift; sourceTree = "<group>"; };
+		F8000002 /* SignupEmailConfirmationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupEmailConfirmationView.swift; sourceTree = "<group>"; };
+		FB31C9E400CC3B074C04CC4E /* ReadingSessionDTO.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingSessionDTO.swift; sourceTree = "<group>"; };
+		FCA827DF40620834DD1744F2 /* ReadingSessionRecord.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingSessionRecord.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +180,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0F1A2B3C4D5061728394A5F /* EPUBKit in Frameworks */,
+				C101B2C3D4E5061728394A60 /* Readability in Frameworks */,
+				C102C3D4E5F6061728394A61 /* ReadabilityUI in Frameworks */,
+				E1000006 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +193,7 @@
 		A4000000 = {
 			isa = PBXGroup;
 			children = (
+				E2000006 /* Supabase.xcconfig */,
 				A4000001 /* LastFirst */,
 				A4000010 /* Products */,
 			);
@@ -95,6 +211,7 @@
 				A4000007 /* Extensions */,
 				A4000008 /* Resources */,
 				A2000020 /* Info.plist */,
+				EDC61D2A712017DC17FFE80B /* Styles */,
 			);
 			path = LastFirst;
 			sourceTree = "<group>";
@@ -105,10 +222,26 @@
 				A2000002 /* ContentView.swift */,
 				A2000003 /* ReadingView.swift */,
 				A2000004 /* LibraryView.swift */,
-				A2000005 /* SettingsView.swift */,
-				A2000006 /* BookmarksView.swift */,
 				A2000007 /* ImagesView.swift */,
+				D3100002 /* ThemesSettingsView.swift */,
 				A2000025 /* ArtifactsView.swift */,
+				D4000001 /* LiquidGlassTestView.swift */,
+				209CD3A36DF73BF4A7605DDB /* TOCSheetView.swift */,
+				97B1B9D9605C603338C590B7 /* BookmarksView.swift */,
+				9425245464C7B7CA96550A1D /* HomeView.swift */,
+				B060B4DB4FFCF0350DFE7FBE /* CuratorView.swift */,
+				429ECC18700A57FDDC15EA8F /* GlobalSearchView.swift */,
+				E2000004 /* AuthView.swift */,
+				E2000005 /* AccountView.swift */,
+				AB66A295D1BD5570393EA479 /* LoginPasswordView.swift */,
+				7B10AA5399D5BEFA3508E475 /* SignupNicknameView.swift */,
+				6EAC76F50B411C46DAD90FD0 /* SignupPasswordView.swift */,
+				B2DC33DC1B786A05E662830E /* SignupInterestsView.swift */,
+				F8000002 /* SignupEmailConfirmationView.swift */,
+				A85F947CF50A07FC486E5D83 /* SplashView.swift */,
+				E1B79FE2F0FCDEA03372EDB9 /* BookPreviewSheet.swift */,
+				E7FCCEBA36A1B2CB63DD6911 /* ReadingStatsSheet.swift */,
+				980C8E61353C203694132FEF /* CatalogPreviewSheet.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -118,6 +251,10 @@
 			children = (
 				A2000015 /* AppState.swift */,
 				A2000016 /* ReadingViewModel.swift */,
+				268BADCF918AD66D25D8542F /* ReaderCoordinator.swift */,
+				E2000003 /* AuthViewModel.swift */,
+				33C664E10E1D6FFBCFD1EDDC /* ReadingStatsViewModel.swift */,
+				37FFC587B0D57E5033E3775F /* CatalogViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -125,9 +262,17 @@
 		A4000004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				A2000012 /* Book.swift */,
+				B2000002 /* LibraryItem.swift */,
+				B2000001 /* ReaderDocument.swift */,
+				D3100001 /* ReaderTheme.swift */,
 				A2000013 /* Settings.swift */,
 				A2000014 /* Bookmark.swift */,
+				1E5232222ECDC75EF37CCB1B /* NavigationTab.swift */,
+				E2000002 /* Profile.swift */,
+				0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */,
+				FCA827DF40620834DD1744F2 /* ReadingSessionRecord.swift */,
+				751CE5A5DC0DEF82AD893E20 /* ReadingStatsCache.swift */,
+				FB31C9E400CC3B074C04CC4E /* ReadingSessionDTO.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -135,23 +280,42 @@
 		A4000005 /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				A2000008 /* SpeedDial.swift */,
 				A2000009 /* SpritzModeView.swift */,
 				A2000010 /* StreamModeView.swift */,
-				A2000011 /* ScanModeView.swift */,
-				A2000021 /* PausedScrollView.swift */,
+				A2000021 /* ReaderScrollView.swift */,
 				A2000022 /* ModeSelector.swift */,
-				A2000024 /* CollapsedDial.swift */,
+				D4000002 /* LiquidGlassSpeedDial.swift */,
+				D4000003 /* RotaryDialGesture.swift */,
+				1B6670672B4C19B12808860B /* FootnotePopoverView.swift */,
+				EDC318EDE1CBA909EF9971A7 /* SearchOverlayView.swift */,
+				8190327746E57504C831F2F8 /* ProgressScrubber.swift */,
+				531EBD32CE4A61CF5799A87E /* MiniReaderBar.swift */,
+				A7D92A85F50F3F1FD4ED298D /* ContinueCard.swift */,
+				32AF24ED35D01AC1B4D93F08 /* BookCoverView.swift */,
+				DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */,
+				A3F441533B88BFD778E24768 /* ReadingStatsSection.swift */,
+				C1F4237EB4C8C567E698046E /* CatalogCoverView.swift */,
 			);
-			path = Components;
-			sourceTree = "<group>";
+			path = LastFirst/Components;
+			sourceTree = SOURCE_ROOT;
 		};
 		A4000006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				A2000017 /* DocumentParser.swift */,
-				0ED8273D9D32A7659E168999 /* BookContentManager.swift */,
+				B2000003 /* DocumentIngestionService.swift */,
+				B2000005 /* PDFOCRTextExtractor.swift */,
 				78CD274DC01D6AC981558AE8 /* ImageStorageManager.swift */,
+				D1A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift */,
+				D1B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift */,
+				D1C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift */,
+				D1F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift */,
+				D1F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift */,
+				8F670EBB6E8B4C4F9A379B87 /* EPUBStructuralParser.swift */,
+				F1551CE79D8650FF66AD58E0 /* EPUBMetadataExtractor.swift */,
+				BDA7F1AAE88E64C7D37119FD /* FullTextSearchService.swift */,
+				E2000001 /* SupabaseManager.swift */,
+				38C51A56B15550EF357661B0 /* ReadingMetricsTracker.swift */,
+				D9DC6D992EF31B637ED9502C /* ReadingMetricsSyncService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -160,6 +324,7 @@
 			isa = PBXGroup;
 			children = (
 				A2000018 /* ColorExtensions.swift */,
+				C3A1B2D0E4F56789ABCD0002 /* ViewExtensions.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -167,7 +332,9 @@
 		A4000008 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				F8000001 /* Fonts.swift */,
 				A2000019 /* Assets.xcassets */,
+				D3C273612F43CE4600704D02 /* Fonts */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -178,6 +345,24 @@
 				A2000000 /* LastFirst.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D3C273612F43CE4600704D02 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				D3C2735E2F43CE4600704D02 /* RethinkSans-VariableFont.ttf */,
+				D3C2735F2F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf */,
+				D3C273602F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		EDC61D2A712017DC17FFE80B /* Styles */ = {
+			isa = PBXGroup;
+			children = (
+				9807B97320BE41A43686A4A3 /* LiquidGlassStyle.swift */,
+			);
+			path = Styles;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -196,6 +381,12 @@
 			dependencies = (
 			);
 			name = LastFirst;
+			packageProductDependencies = (
+				C0C1D2E3F4A5061728394A5C /* EPUBKit */,
+				C0D1E2F3A4B5061728394A5D /* Readability */,
+				C0E1F2A3B4C5061728394A5E /* ReadabilityUI */,
+				E3000001 /* Supabase */,
+			);
 			productName = LastFirst;
 			productReference = A2000000 /* LastFirst.app */;
 			productType = "com.apple.product-type.application";
@@ -208,7 +399,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					A5000001 = {
 						CreatedOnToolsVersion = 15.0;
@@ -224,6 +415,11 @@
 				Base,
 			);
 			mainGroup = A4000000;
+			packageReferences = (
+				C0A1B2C3D4E5F60718293A4B /* XCRemoteSwiftPackageReference "EPUBKit" */,
+				C0B1C2D3E4F5061728394A5B /* XCRemoteSwiftPackageReference "swift-readability" */,
+				E4000001 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			productRefGroup = A4000010 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -238,6 +434,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D3C273622F43CE4600704D02 /* RethinkSans-VariableFont.ttf in Resources */,
+				D3C273632F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf in Resources */,
+				D3C273642F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf in Resources */,
 				A1000019 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -253,26 +452,76 @@
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* ReadingView.swift in Sources */,
 				A1000004 /* LibraryView.swift in Sources */,
-				A1000005 /* SettingsView.swift in Sources */,
-				A1000006 /* BookmarksView.swift in Sources */,
 				A1000007 /* ImagesView.swift in Sources */,
-				A1000008 /* SpeedDial.swift in Sources */,
 				A1000009 /* SpritzModeView.swift in Sources */,
 				A1000010 /* StreamModeView.swift in Sources */,
-				A1000011 /* ScanModeView.swift in Sources */,
-				A1000012 /* Book.swift in Sources */,
+				B1000002 /* LibraryItem.swift in Sources */,
+				B1000001 /* ReaderDocument.swift in Sources */,
+				D3000001 /* ReaderTheme.swift in Sources */,
 				A1000013 /* Settings.swift in Sources */,
 				A1000014 /* Bookmark.swift in Sources */,
 				A1000015 /* AppState.swift in Sources */,
 				A1000016 /* ReadingViewModel.swift in Sources */,
-				A1000017 /* DocumentParser.swift in Sources */,
+				B1000003 /* DocumentIngestionService.swift in Sources */,
+				B1000005 /* PDFOCRTextExtractor.swift in Sources */,
 				A1000018 /* ColorExtensions.swift in Sources */,
-				A1000020 /* PausedScrollView.swift in Sources */,
+				C3A1B2D0E4F56789ABCD0001 /* ViewExtensions.swift in Sources */,
+				A1000020 /* ReaderScrollView.swift in Sources */,
 				A1000022 /* ModeSelector.swift in Sources */,
-				A1000024 /* CollapsedDial.swift in Sources */,
 				A1000025 /* ArtifactsView.swift in Sources */,
-				1580C25E9410EB124DF9463C /* BookContentManager.swift in Sources */,
+				D3000002 /* ThemesSettingsView.swift in Sources */,
+				D2F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift in Sources */,
 				7FF3D9EBCAC2E70B2636F1C1 /* ImageStorageManager.swift in Sources */,
+				D2A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift in Sources */,
+				D2B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift in Sources */,
+				D2C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift in Sources */,
+				D2F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift in Sources */,
+				D5000001 /* LiquidGlassTestView.swift in Sources */,
+				D5000002 /* LiquidGlassSpeedDial.swift in Sources */,
+				D5000003 /* RotaryDialGesture.swift in Sources */,
+				3DB8FB2FEBFDABA71D81AECB /* LiquidGlassStyle.swift in Sources */,
+				88F4343FDBE20122116C7187 /* EPUBStructuralParser.swift in Sources */,
+				B834C6ACBB924673CC2071A6 /* EPUBMetadataExtractor.swift in Sources */,
+				A22810AD1FEEDF0AFF96C908 /* FullTextSearchService.swift in Sources */,
+				4D0EA37BA2FE4E53EB6DAB8E /* FootnotePopoverView.swift in Sources */,
+				A87919DC17DC9B44ABE80E2C /* SearchOverlayView.swift in Sources */,
+				3A6A52B4849B757233C4A137 /* ProgressScrubber.swift in Sources */,
+				F565B2523D63F395807FF79A /* TOCSheetView.swift in Sources */,
+				5CB0E9ED2409A42BF1A68333 /* BookmarksView.swift in Sources */,
+				F2A5A084096D55401DF6DB52 /* NavigationTab.swift in Sources */,
+				BAB0EB2DB90F3F5A5C59533D /* ReaderCoordinator.swift in Sources */,
+				C8B77E81110E8FFB757F72FD /* HomeView.swift in Sources */,
+				9452E6ACE4583F201326B955 /* CuratorView.swift in Sources */,
+				D6F6D7E6203ABB2509767E75 /* GlobalSearchView.swift in Sources */,
+				C31A0013EBCF5B4136C0DFC8 /* MiniReaderBar.swift in Sources */,
+				E1000001 /* SupabaseManager.swift in Sources */,
+				E1000002 /* Profile.swift in Sources */,
+				E1000003 /* AuthViewModel.swift in Sources */,
+				E1000004 /* AuthView.swift in Sources */,
+				E1000005 /* AccountView.swift in Sources */,
+				ACF44C72788FB4A065FF78F0 /* LoginPasswordView.swift in Sources */,
+				9C623CC327E90941FE66C903 /* SignupNicknameView.swift in Sources */,
+				44C3ADE49E358B27D7C96FAA /* SignupPasswordView.swift in Sources */,
+				3174C987A530025625D94F04 /* SignupInterestsView.swift in Sources */,
+				F7000001 /* Fonts.swift in Sources */,
+				F7000002 /* SignupEmailConfirmationView.swift in Sources */,
+				9B6D8294E65B4DC85188938F /* ContinueCard.swift in Sources */,
+				0A7AD5E804E454FEBBC8885A /* SplashView.swift in Sources */,
+				79AE94645E4495862C8DD4F4 /* BookPreviewSheet.swift in Sources */,
+				6394598283EABF385D69D51A /* CatalogItem.swift in Sources */,
+				44CB00732A966413E3FC5B5B /* BookCoverView.swift in Sources */,
+				475E339186C8C25CEAFD6001 /* BookCoverRibbon.swift in Sources */,
+				9626AABBA5F964B93A2CDEFB /* ReadingSessionRecord.swift in Sources */,
+				909DEAD110048BAA981C9359 /* ReadingStatsCache.swift in Sources */,
+				B77BBA3ABDF654451DEFF27F /* ReadingSessionDTO.swift in Sources */,
+				D6882B035374E011F7B7212E /* ReadingMetricsTracker.swift in Sources */,
+				18C83E049EA05734C23756D4 /* ReadingMetricsSyncService.swift in Sources */,
+				AB136B8858CA3132FE83649C /* ReadingStatsViewModel.swift in Sources */,
+				ACD53CC0BE04D469303667F9 /* ReadingStatsSection.swift in Sources */,
+				368655AC770C84B41F8F24E2 /* ReadingStatsSheet.swift in Sources */,
+				AA7E8F66547A3D1C5B0C16D6 /* CatalogViewModel.swift in Sources */,
+				EA07D4E60B430898A5166873 /* CatalogCoverView.swift in Sources */,
+				D3605C7DC4CF3FDFD031D628 /* CatalogPreviewSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,6 +530,7 @@
 /* Begin XCBuildConfiguration section */
 		A8000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E2000006 /* Supabase.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -314,6 +564,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 54479HRLA2;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -337,6 +588,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -344,6 +596,7 @@
 		};
 		A8000002 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E2000006 /* Supabase.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -377,6 +630,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 54479HRLA2;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -393,6 +647,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -403,19 +658,21 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = 54479HRLA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LastFirst/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Last First";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = armv7;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -424,7 +681,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.lastfirst.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -434,19 +691,21 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = 54479HRLA2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LastFirst/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Last First";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = armv7;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -455,7 +714,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.lastfirst.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -482,6 +741,56 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C0A1B2C3D4E5F60718293A4B /* XCRemoteSwiftPackageReference "EPUBKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/witekbobrowski/EPUBKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.5.0;
+			};
+		};
+		C0B1C2D3E4F5061728394A5B /* XCRemoteSwiftPackageReference "swift-readability" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Ryu0118/swift-readability.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.0;
+			};
+		};
+		E4000001 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C0C1D2E3F4A5061728394A5C /* EPUBKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0A1B2C3D4E5F60718293A4B /* XCRemoteSwiftPackageReference "EPUBKit" */;
+			productName = EPUBKit;
+		};
+		C0D1E2F3A4B5061728394A5D /* Readability */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0B1C2D3E4F5061728394A5B /* XCRemoteSwiftPackageReference "swift-readability" */;
+			productName = Readability;
+		};
+		C0E1F2A3B4C5061728394A5E /* ReadabilityUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0B1C2D3E4F5061728394A5B /* XCRemoteSwiftPackageReference "swift-readability" */;
+			productName = ReadabilityUI;
+		};
+		E3000001 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E4000001 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A7000001 /* Project object */;
 }

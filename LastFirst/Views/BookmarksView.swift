@@ -4,10 +4,14 @@ struct BookmarksView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
-    let bookId: UUID
+    let documentId: UUID
+    var onNavigateToBookmark: ((Annotation) -> Void)?
 
-    var bookmarks: [Bookmark] {
-        appState.getBookmarks(for: bookId)
+    var bookmarks: [Annotation] {
+        appState
+            .getAnnotations(for: documentId)
+            .filter { $0.kind == .bookmark }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     var body: some View {
@@ -55,14 +59,17 @@ struct BookmarksView: View {
     private var bookmarksList: some View {
         List {
             ForEach(bookmarks) { bookmark in
-                BookmarkRow(bookmark: bookmark)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            appState.removeBookmark(bookmark)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
+                BookmarkRow(bookmark: bookmark) {
+                    onNavigateToBookmark?(bookmark)
+                    dismiss()
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        appState.removeAnnotation(bookmark)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
+                }
             }
         }
         .listStyle(.plain)
@@ -70,11 +77,11 @@ struct BookmarksView: View {
 }
 
 struct BookmarkRow: View {
-    let bookmark: Bookmark
-    @Environment(\.dismiss) private var dismiss
+    let bookmark: Annotation
+    var onTap: () -> Void
 
     var body: some View {
-        Button(action: goToBookmark) {
+        Button(action: onTap) {
             VStack(alignment: .leading, spacing: 8) {
                 if let title = bookmark.title {
                     Text(title)
@@ -82,13 +89,13 @@ struct BookmarkRow: View {
                         .foregroundColor(.primary)
                 }
 
-                Text(bookmark.text)
+                Text(bookmark.excerpt ?? "")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(3)
 
                 HStack {
-                    Text(bookmark.dateCreated, style: .date)
+                    Text(bookmark.createdAt, style: .date)
                         .font(.caption)
                         .foregroundColor(.gray)
 
@@ -103,14 +110,9 @@ struct BookmarkRow: View {
         }
         .buttonStyle(.plain)
     }
-
-    private func goToBookmark() {
-        // This would trigger navigation to the bookmark position
-        dismiss()
-    }
 }
 
 #Preview {
-    BookmarksView(bookId: UUID())
+    BookmarksView(documentId: UUID())
         .environmentObject(AppState())
 }

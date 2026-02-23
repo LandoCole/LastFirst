@@ -2,106 +2,111 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
-    @State private var showLibrary: Bool = false
+    @EnvironmentObject var readerCoordinator: ReaderCoordinator
+    @State private var selectedTab: NavigationTab = .home
+    @State private var showCuratorSheet = false
+    @State private var curatorInputText = ""
+    @Namespace private var bottomBarNamespace
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground)
-                .ignoresSafeArea()
+            // Page content — opacity-switched NavigationStacks
+            NavigationStack {
+                HomeView(onNavigateToCurator: { showCuratorSheet = true })
+            }
+            .opacity(selectedTab == .home ? 1 : 0)
+            .allowsHitTesting(selectedTab == .home)
 
-            if let book = appState.currentBook {
-                ReadingView(book: book)
-            } else {
-                welcomeView
+            NavigationStack {
+                LibraryView()
+            }
+            .opacity(selectedTab == .library ? 1 : 0)
+            .allowsHitTesting(selectedTab == .library)
+
+            // MiniReaderBar overlay (above bottom bar)
+            if readerCoordinator.presentationState == .minimized {
+                VStack {
+                    Spacer()
+                    MiniReaderBar()
+                        .padding(.bottom, 68)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(7)
+            }
+
+            // Custom bottom bar
+            VStack {
+                Spacer()
+                bottomBar
+            }
+            .zIndex(8)
+        }
+        .ignoresSafeArea(.keyboard)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: readerCoordinator.presentationState)
+        .sheet(isPresented: readerCoordinator.isSheetPresented) {
+            if let viewModel = readerCoordinator.viewModel,
+               let item = readerCoordinator.activeItem {
+                ReadingView(viewModel: viewModel, item: item)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(.clear)
+                    .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
             }
         }
-        .sheet(isPresented: $showLibrary) {
-            LibraryView()
+        .sheet(isPresented: $showCuratorSheet) {
+            CuratorView(inputText: $curatorInputText)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
-    private var welcomeView: some View {
-        VStack(spacing: 32) {
-            Spacer()
+    // MARK: - Bottom Bar
 
-            // Logo
-            VStack(spacing: 16) {
-                // Icon representation
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.primary)
-                        .frame(width: 32, height: 32)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.primary)
-                        .frame(width: 8, height: 48)
+    private var bottomBar: some View {
+        GlassContainer {
+            HStack(spacing: 12) {
+                // Home button
+                Button {
+                    selectedTab = .home
+                } label: {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(selectedTab == .home ? .primary : .secondary)
+                        .frame(width: 36, height: 36)
                 }
+                .nativeGlassButton(shape: .circle)
+                .conditionalGlassEffectID("homeTab", in: bottomBarNamespace)
 
-                Text("Last First")
-                    .font(.system(size: 36, weight: .bold, design: .default))
-                    .foregroundColor(.primary)
-            }
-
-            Text("Speed Reading, Reimagined")
-                .font(.title3)
-                .foregroundColor(.secondary)
-
-            Spacer()
-
-            // Quick start
-            VStack(spacing: 16) {
-                if !appState.library.isEmpty {
-                    // Continue reading button
-                    if let lastBook = appState.library.first {
-                        Button(action: { appState.currentBook = lastBook }) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Continue Reading")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                    Text(lastBook.title)
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                }
-                                Spacer()
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.primary)
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color.gray.opacity(0.1))
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                // Open library button
-                Button(action: { showLibrary = true }) {
+                // Curator input (tappable fake text field)
+                Button {
+                    showCuratorSheet = true
+                } label: {
                     HStack {
-                        Image(systemName: "books.vertical")
-                        Text(appState.library.isEmpty ? "Import Your First Book" : "Open Library")
+                        Text("Ask Curator")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                        Spacer()
                     }
-                    .font(.headline)
-                    .foregroundColor(Color(UIColor.systemBackground))
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 16)
-                    .background(Color.primary)
-                    .cornerRadius(12)
+                    .padding(.horizontal, 14)
+                    .frame(height: 36)
                 }
-            }
-            .padding(.horizontal, 24)
+                .nativeGlassButton(shape: .pill)
+                .conditionalGlassEffectID("curatorInput", in: bottomBarNamespace)
 
-            Spacer()
-
-            // Footer
-            VStack(spacing: 8) {
-                Text("Supports ePub, PDF, and text files")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                // Library button
+                Button {
+                    selectedTab = .library
+                } label: {
+                    Image(systemName: "books.vertical.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(selectedTab == .library ? .primary : .secondary)
+                        .frame(width: 36, height: 36)
+                }
+                .nativeGlassButton(shape: .circle)
+                .conditionalGlassEffectID("libraryTab", in: bottomBarNamespace)
             }
-            .padding(.bottom, 32)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
         }
     }
 }
@@ -109,4 +114,6 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environmentObject(AppState())
+        .environmentObject(ReaderCoordinator())
+        .environmentObject(AuthViewModel())
 }

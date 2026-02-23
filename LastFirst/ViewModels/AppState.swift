@@ -6,23 +6,23 @@ class AppState: ObservableObject {
     @Published var settings: AppSettings {
         didSet { saveSettings() }
     }
-    @Published var library: [Book] {
+    @Published var library: [LibraryItem] {
         didSet { saveLibrary() }
     }
-    @Published var bookmarks: [UUID: [Bookmark]] {
-        didSet { saveBookmarks() }
+    @Published var annotations: [UUID: [Annotation]] {
+        didSet { saveAnnotations() }
     }
     @Published var savedImages: [UUID: [SavedImageMetadata]] {
         didSet { saveSavedImages() }
     }
-    @Published var currentBook: Book?
     @Published var lastError: AppError?
 
     private let settingsKey = "app_settings"
     private let libraryKey = "library"
-    private let bookmarksKey = "bookmarks"
+    private let annotationsKey = "annotations_v1"
     private let imagesKey = "saved_images_v2"
     private let imageStorage = ImageStorageManager.shared
+    private var dominantColorCache: [UUID: UIColor] = [:]
     
     // MARK: - Error Types
     enum AppError: Error, LocalizedError {
@@ -45,7 +45,7 @@ class AppState: ObservableObject {
     init() {
         self.settings = Self.loadSettings()
         self.library = Self.loadLibrary()
-        self.bookmarks = Self.loadBookmarks()
+        self.annotations = Self.loadAnnotations()
         self.savedImages = Self.loadSavedImages()
         self.footnotes = Self.loadFootnotes()
         
@@ -57,42 +57,7 @@ class AppState: ObservableObject {
     private func migrateImageDataIfNeeded() {
         let migrationKey = "images_migrated_v2"
         guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
-        
-        // Check for old format images and migrate them
-        if let oldData = UserDefaults.standard.data(forKey: "saved_images"),
-           let oldImages = try? JSONDecoder().decode([UUID: [SavedImage]].self, from: oldData) {
-            
-            for (bookId, images) in oldImages {
-                for image in images {
-                    // Save image data to file system
-                    do {
-                        try imageStorage.saveImage(image.imageData, imageId: image.id, bookId: bookId)
-                        
-                        // Create metadata entry
-                        let metadata = SavedImageMetadata(
-                            id: image.id,
-                            bookId: image.bookId,
-                            pageIndex: image.pageIndex,
-                            wordIndex: image.wordIndex,
-                            isSeen: image.isSeen,
-                            isBookmarked: image.isBookmarked,
-                            dateFound: image.dateFound
-                        )
-                        
-                        if savedImages[bookId] == nil {
-                            savedImages[bookId] = []
-                        }
-                        savedImages[bookId]?.append(metadata)
-                    } catch {
-                        lastError = .migrationError("Failed to migrate image: \(error.localizedDescription)")
-                    }
-                }
-            }
-            
-            // Remove old data
-            UserDefaults.standard.removeObject(forKey: "saved_images")
-        }
-        
+
         UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
@@ -120,14 +85,14 @@ class AppState: ObservableObject {
     }
 
     // MARK: - Library
-    private static func loadLibrary() -> [Book] {
+    private static func loadLibrary() -> [LibraryItem] {
         guard let data = UserDefaults.standard.data(forKey: "library") else {
             return []
         }
         
         do {
-            let library = try JSONDecoder().decode([Book].self, from: data)
-            return library.sorted { ($0.lastOpened ?? $0.dateAdded) > ($1.lastOpened ?? $1.dateAdded) }
+            let library = try JSONDecoder().decode([LibraryItem].self, from: data)
+            return library.sorted { ($0.lastOpenedAt ?? $0.dateAdded) > ($1.lastOpenedAt ?? $1.dateAdded) }
         } catch {
             print("[AppState] Failed to decode library: \(error)")
             return []
@@ -143,64 +108,108 @@ class AppState: ObservableObject {
         }
     }
 
-    func addBook(_ book: Book) {
-        library.insert(book, at: 0)
+    func addItem(_ item: LibraryItem) {
+        library.insert(item, at: 0)
     }
 
-    func updateBook(_ book: Book) {
-        if let index = library.firstIndex(where: { $0.id == book.id }) {
-            library[index] = book
+    func updateItem(_ item: LibraryItem) {
+        if let index = library.firstIndex(where: { $0.id == item.id }) {
+            library[index] = item
         }
     }
 
-    func deleteBook(_ book: Book) {
-        library.removeAll { $0.id == book.id }
-        bookmarks.removeValue(forKey: book.id)
-        savedImages.removeValue(forKey: book.id)
+    func deleteItem(_ item: LibraryItem) {
+        library.removeAll { $0.id == item.id }
+        annotations.removeValue(forKey: item.documentId)
+        savedImages.removeValue(forKey: item.documentId)
+        footnotes.removeValue(forKey: item.documentId)
         
         // Clean up file system images
-        imageStorage.deleteAllImages(for: book.id)
+        imageStorage.deleteAllImages(for: item.documentId)
         
-        // Delete the book file itself
-        try? FileManager.default.removeItem(atPath: book.filePath)
+        // Delete stored document snapshots
+        Task {
+            try? await DocumentStoreActor.shared.delete(documentId: item.documentId)
+            try? await ResourceCacheActor.shared.delete(documentId: item.documentId)
+        }
+        
+        // Delete the local file itself (web items have no local file)
+        if case .localFile(let local) = item.source {
+            try? FileManager.default.removeItem(at: local.fileURL)
+        }
     }
 
-    // MARK: - Bookmarks
-    private static func loadBookmarks() -> [UUID: [Bookmark]] {
-        guard let data = UserDefaults.standard.data(forKey: "bookmarks") else {
+    @MainActor
+    func refreshLibraryMetadataFromStoreIfNeeded() async {
+        guard !library.isEmpty else { return }
+
+        for index in library.indices {
+            let item = library[index]
+
+            let needsTitle = item.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || item.title == "Unknown Title"
+            let needsAuthor = (item.author ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || item.author == "Unknown Author"
+            guard needsTitle || needsAuthor else { continue }
+
+            do {
+                var updated = item
+
+                let packages = try await DocumentStoreActor.shared.load(documentId: item.documentId)
+                let manifest = packages.manifest
+                let docTitle = manifest.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let docAuthor = manifest.authors.first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+                if needsTitle, !docTitle.isEmpty {
+                    updated.title = docTitle
+                }
+                if needsAuthor {
+                    updated.author = docAuthor.isEmpty ? nil : docAuthor
+                }
+
+                if updated != item {
+                    library[index] = updated
+                }
+            } catch {
+                continue
+            }
+        }
+    }
+
+    // MARK: - Annotations
+    private static func loadAnnotations() -> [UUID: [Annotation]] {
+        guard let data = UserDefaults.standard.data(forKey: "annotations_v1") else {
             return [:]
         }
         
         do {
-            return try JSONDecoder().decode([UUID: [Bookmark]].self, from: data)
+            return try JSONDecoder().decode([UUID: [Annotation]].self, from: data)
         } catch {
-            print("[AppState] Failed to decode bookmarks: \(error)")
+            print("[AppState] Failed to decode annotations: \(error)")
             return [:]
         }
     }
 
-    private func saveBookmarks() {
+    private func saveAnnotations() {
         do {
-            let data = try JSONEncoder().encode(bookmarks)
-            UserDefaults.standard.set(data, forKey: bookmarksKey)
+            let data = try JSONEncoder().encode(annotations)
+            UserDefaults.standard.set(data, forKey: annotationsKey)
         } catch {
-            lastError = .persistenceError("Bookmarks: \(error.localizedDescription)")
+            lastError = .persistenceError("Annotations: \(error.localizedDescription)")
         }
     }
 
-    func addBookmark(_ bookmark: Bookmark) {
-        if bookmarks[bookmark.bookId] == nil {
-            bookmarks[bookmark.bookId] = []
+    func addAnnotation(_ annotation: Annotation) {
+        if annotations[annotation.documentId] == nil {
+            annotations[annotation.documentId] = []
         }
-        bookmarks[bookmark.bookId]?.append(bookmark)
+        annotations[annotation.documentId]?.append(annotation)
     }
 
-    func removeBookmark(_ bookmark: Bookmark) {
-        bookmarks[bookmark.bookId]?.removeAll { $0.id == bookmark.id }
+    func removeAnnotation(_ annotation: Annotation) {
+        annotations[annotation.documentId]?.removeAll { $0.id == annotation.id }
     }
 
-    func getBookmarks(for bookId: UUID) -> [Bookmark] {
-        return bookmarks[bookId] ?? []
+    func getAnnotations(for documentId: UUID) -> [Annotation] {
+        return annotations[documentId] ?? []
     }
 
     // MARK: - Saved Images (File-based storage)
@@ -229,12 +238,12 @@ class AppState: ObservableObject {
     func addSavedImage(_ image: SavedImage) {
         // Save image data to file system
         do {
-            try imageStorage.saveImage(image.imageData, imageId: image.id, bookId: image.bookId)
+            try imageStorage.saveImage(image.imageData, imageId: image.id, bookId: image.documentId)
             
             // Store only metadata in UserDefaults
             let metadata = SavedImageMetadata(
                 id: image.id,
-                bookId: image.bookId,
+                documentId: image.documentId,
                 pageIndex: image.pageIndex,
                 wordIndex: image.wordIndex,
                 isSeen: image.isSeen,
@@ -242,42 +251,42 @@ class AppState: ObservableObject {
                 dateFound: image.dateFound
             )
             
-            if savedImages[image.bookId] == nil {
-                savedImages[image.bookId] = []
+            if savedImages[image.documentId] == nil {
+                savedImages[image.documentId] = []
             }
-            savedImages[image.bookId]?.append(metadata)
+            savedImages[image.documentId]?.append(metadata)
         } catch {
             lastError = .fileAccessError("Failed to save image: \(error.localizedDescription)")
         }
     }
 
-    func markImageAsSeen(_ imageId: UUID, bookId: UUID) {
-        if let index = savedImages[bookId]?.firstIndex(where: { $0.id == imageId }) {
-            savedImages[bookId]?[index].isSeen = true
+    func markImageAsSeen(_ imageId: UUID, documentId: UUID) {
+        if let index = savedImages[documentId]?.firstIndex(where: { $0.id == imageId }) {
+            savedImages[documentId]?[index].isSeen = true
         }
     }
 
-    func toggleImageBookmark(_ imageId: UUID, bookId: UUID) {
-        if let index = savedImages[bookId]?.firstIndex(where: { $0.id == imageId }) {
-            savedImages[bookId]?[index].isBookmarked.toggle()
+    func toggleImageBookmark(_ imageId: UUID, documentId: UUID) {
+        if let index = savedImages[documentId]?.firstIndex(where: { $0.id == imageId }) {
+            savedImages[documentId]?[index].isBookmarked.toggle()
         }
     }
 
-    func getUnseenImageCount(for bookId: UUID) -> Int {
-        return savedImages[bookId]?.filter { !$0.isSeen }.count ?? 0
+    func getUnseenImageCount(for documentId: UUID) -> Int {
+        return savedImages[documentId]?.filter { !$0.isSeen }.count ?? 0
     }
 
-    func getSavedImages(for bookId: UUID) -> [SavedImage] {
-        guard let metadataList = savedImages[bookId] else { return [] }
+    func getSavedImages(for documentId: UUID) -> [SavedImage] {
+        guard let metadataList = savedImages[documentId] else { return [] }
         
         return metadataList.compactMap { metadata in
-            guard let imageData = imageStorage.loadImage(imageId: metadata.id, bookId: bookId) else {
+            guard let imageData = imageStorage.loadImage(imageId: metadata.id, bookId: documentId) else {
                 return nil
             }
             
             return SavedImage(
                 id: metadata.id,
-                bookId: metadata.bookId,
+                documentId: metadata.documentId,
                 imageData: imageData,
                 pageIndex: metadata.pageIndex,
                 wordIndex: metadata.wordIndex,
@@ -288,14 +297,66 @@ class AppState: ObservableObject {
         }
     }
     
-    func deleteImage(_ imageId: UUID, bookId: UUID) {
-        imageStorage.deleteImage(imageId: imageId, bookId: bookId)
-        savedImages[bookId]?.removeAll { $0.id == imageId }
+    func deleteImage(_ imageId: UUID, documentId: UUID) {
+        imageStorage.deleteImage(imageId: imageId, bookId: documentId)
+        savedImages[documentId]?.removeAll { $0.id == imageId }
     }
     
     // MARK: - Cover Images
-    func getCoverImage(for bookId: UUID) -> Data? {
-        return imageStorage.loadCoverImage(for: bookId)
+    func getCoverImage(for documentId: UUID) -> Data? {
+        return imageStorage.loadCoverImage(for: documentId)
+    }
+
+    /// Returns the dominant color of the cover image, cached in memory.
+    func getDominantCoverColor(for documentId: UUID) -> UIColor? {
+        if let cached = dominantColorCache[documentId] { return cached }
+        guard let data = getCoverImage(for: documentId),
+              let image = UIImage(data: data),
+              let color = image.dominantColor() else { return nil }
+        dominantColorCache[documentId] = color
+        return color
+    }
+
+    /// Load any pending images that were extracted during document ingestion
+    func loadPendingImages(for documentId: UUID) {
+        let key = "pending_images_\(documentId.uuidString)"
+        guard let pendingImages = UserDefaults.standard.array(forKey: key) as? [[String: Any]] else {
+            return
+        }
+
+        for imageInfo in pendingImages {
+            guard let idString = imageInfo["id"] as? String,
+                  let imageId = UUID(uuidString: idString),
+                  let pageIndex = imageInfo["pageIndex"] as? Int,
+                  let wordIndex = imageInfo["wordIndex"] as? Int,
+                  let timestamp = imageInfo["dateFound"] as? TimeInterval else {
+                continue
+            }
+
+            // Check if we already have this image in metadata
+            if savedImages[documentId]?.contains(where: { $0.id == imageId }) == true {
+                continue
+            }
+
+            // Add metadata (image data is already saved to file system)
+            let metadata = SavedImageMetadata(
+                id: imageId,
+                documentId: documentId,
+                pageIndex: pageIndex,
+                wordIndex: wordIndex,
+                isSeen: false,
+                isBookmarked: false,
+                dateFound: Date(timeIntervalSince1970: timestamp)
+            )
+
+            if savedImages[documentId] == nil {
+                savedImages[documentId] = []
+            }
+            savedImages[documentId]?.append(metadata)
+        }
+
+        // Clear pending images after loading
+        UserDefaults.standard.removeObject(forKey: key)
     }
     
     // MARK: - Footnotes
@@ -328,13 +389,32 @@ class AppState: ObservableObject {
     }
     
     func addFootnote(_ footnote: Footnote) {
-        if footnotes[footnote.bookId] == nil {
-            footnotes[footnote.bookId] = []
+        if footnotes[footnote.documentId] == nil {
+            footnotes[footnote.documentId] = []
         }
-        footnotes[footnote.bookId]?.append(footnote)
+        footnotes[footnote.documentId]?.append(footnote)
     }
     
-    func getFootnotes(for bookId: UUID) -> [Footnote] {
-        return footnotes[bookId] ?? []
+    func getFootnotes(for documentId: UUID) -> [Footnote] {
+        return footnotes[documentId] ?? []
+    }
+
+    /// Auto-populate footnotes from parsed document packages.
+    func populateFootnotes(from packages: CanonicalDocumentPackages, documentId: UUID) {
+        let existingFootnotes = footnotes[documentId] ?? []
+        let existingIds = Set(existingFootnotes.map { $0.indicator })
+
+        for record in packages.textAnchorsPackage.footnotes {
+            guard !existingIds.contains(record.refText) else { continue }
+
+            let footnote = Footnote(
+                documentId: documentId,
+                indicator: record.refText,
+                content: record.bodyText,
+                wordIndex: 0,
+                contextText: ""
+            )
+            addFootnote(footnote)
+        }
     }
 }

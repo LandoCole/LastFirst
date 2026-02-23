@@ -3,38 +3,11 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @State private var showLiquidGlassLab = false
 
     var body: some View {
         NavigationStack {
             Form {
-                // Appearance
-                Section("Appearance") {
-                    Toggle("Dark Mode", isOn: $appState.settings.isDarkMode)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Font Size")
-                            Spacer()
-                            Text("\(Int(appState.settings.fontSize))pt")
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(
-                            value: $appState.settings.fontSize,
-                            in: 16...48,
-                            step: 2
-                        )
-                    }
-
-                    // Preview
-                    HStack {
-                        Spacer()
-                        Text("Sample")
-                            .font(.system(size: appState.settings.fontSize, design: .serif))
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                }
-
                 // Reading Settings
                 Section("Reading") {
                     VStack(alignment: .leading, spacing: 8) {
@@ -52,6 +25,26 @@ struct SettingsView: View {
                             in: 50...1500,
                             step: 25
                         )
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Paragraph Breath")
+                            Spacer()
+                            Text("\(appState.settings.paragraphBreathMs)ms")
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(
+                            value: Binding(
+                                get: { Double(appState.settings.paragraphBreathMs) },
+                                set: { appState.settings.paragraphBreathMs = Int($0) }
+                            ),
+                            in: 0...1000,
+                            step: 50
+                        )
+                        Text("Pause briefly on the last word of each paragraph")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -76,21 +69,23 @@ struct SettingsView: View {
                             Text(mode.displayName).tag(mode)
                         }
                     }
-                    
-                    Picker("Speed Control", selection: $appState.settings.dialStyle) {
-                        ForEach(DialStyle.allCases, id: \.self) { style in
-                            Text(style.displayName).tag(style)
+
+                }
+
+                // Developer
+                Section("Developer") {
+                    Button {
+                        showLiquidGlassLab = true
+                    } label: {
+                        HStack {
+                            Label("Liquid Glass Lab", systemImage: "sparkles")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
-                    
-                    Picker("Auto-Hide Dial", selection: $appState.settings.autoHideDialDelay) {
-                        ForEach(AutoHideDialDelay.allCases, id: \.self) { delay in
-                            Text(delay.displayName).tag(delay)
-                        }
-                    }
-                    Text("In Stream/Scan modes, hide dial after inactivity")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    .foregroundColor(.primary)
                 }
 
                 // About
@@ -112,6 +107,9 @@ struct SettingsView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showLiquidGlassLab) {
+                LiquidGlassTestView()
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -121,7 +119,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .preferredColorScheme(appState.settings.isDarkMode ? .dark : .light)
+            .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
         }
     }
 }
