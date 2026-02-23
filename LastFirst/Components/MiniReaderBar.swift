@@ -13,14 +13,14 @@ struct MiniReaderBar: View {
         HStack(spacing: 12) {
             // Cover thumbnail
             coverThumbnail
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
 
             // Title + chapter + time remaining
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(item?.title ?? "")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                    .font(.caption)
+                    .fontWeight(.bold)
                     .lineLimit(1)
 
                 if let vm = viewModel {
@@ -36,33 +36,30 @@ struct MiniReaderBar: View {
 
             Spacer()
 
-            // Play/pause button
-            if let vm = viewModel {
-                Button {
-                    vm.togglePlayPause()
-                } label: {
-                    Image(systemName: vm.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.primary)
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
+            // Open reader button
+            Button {
+                readerCoordinator.expand()
+            } label: {
+                Image(systemName: "book.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, height: 36)
             }
+            .buttonStyle(.plain)
 
             // Dismiss button
             Button {
                 readerCoordinator.dismiss(appState: appState)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(Color.primary.opacity(0.08)))
+                    .font(.system(size: 20))
+                    .foregroundColor(.primary)
+                    .frame(width: 36, height: 36)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .bottom) {
             // Progress bar along bottom edge
@@ -73,6 +70,7 @@ struct MiniReaderBar: View {
                         .frame(width: geo.size.width * vm.progress, height: 2)
                 }
                 .frame(height: 2)
+                .padding(.horizontal, 20)
             }
         }
         .glassStyle(shape: .pill)
@@ -113,8 +111,8 @@ struct MiniReaderBar: View {
             coverImageData: readerCoordinator.coverImageData,
             title: item?.title ?? "",
             iconName: item?.coverIconName ?? "book.closed.fill",
-            size: CGSize(width: 44, height: 44),
-            cornerRadius: 8
+            size: CGSize(width: 32, height: 32),
+            cornerRadius: 6
         )
     }
 

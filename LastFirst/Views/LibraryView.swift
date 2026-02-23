@@ -223,6 +223,7 @@ struct LibraryView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
+        .padding(.leading, 5)
         .padding(.trailing, 12)
         .frame(height: 44)
         .glassStyle(shape: .pill)
