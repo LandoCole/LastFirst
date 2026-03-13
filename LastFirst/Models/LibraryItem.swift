@@ -90,7 +90,7 @@ struct LibraryItem: Identifiable, Codable, Equatable {
     var wordCount: Int?
     var downloadState: DownloadState
 
-    enum InferredReadingStatus {
+    enum InferredReadingStatus: Hashable {
         case reading, completed, wantToRead
     }
 
@@ -160,7 +160,18 @@ extension LibraryItem {
             }
         case .web:
             return "globe"
+        case .curated(let c):
+            switch c.fileType {
+            case "epub": return "book.closed.fill"
+            case "pdf": return "doc.fill"
+            default: return "newspaper.fill"
+            }
         }
+    }
+
+    var curatedCoverURL: URL? {
+        if case .curated(let c) = source { return c.coverUrl }
+        return nil
     }
 }
 
@@ -191,6 +202,7 @@ extension LibraryItem: PreviewableItem {
 enum LibrarySource: Codable, Equatable {
     case localFile(LocalFile)
     case web(Web)
+    case curated(Curated)
 
     struct LocalFile: Codable, Equatable {
         var fileURL: URL
@@ -212,15 +224,24 @@ enum LibrarySource: Codable, Equatable {
         }
     }
 
+    struct Curated: Codable, Equatable {
+        var contentId: UUID
+        var sourceUrl: URL?
+        var coverUrl: URL?
+        var fileType: String?    // "epub", "pdf", "web", "article"
+    }
+
     private enum CodingKeys: String, CodingKey {
         case type
         case localFile
         case web
+        case curated
     }
 
     private enum SourceType: String, Codable {
         case localFile
         case web
+        case curated
     }
 
     init(from decoder: Decoder) throws {
@@ -231,6 +252,8 @@ enum LibrarySource: Codable, Equatable {
             self = .localFile(try container.decode(LocalFile.self, forKey: .localFile))
         case .web:
             self = .web(try container.decode(Web.self, forKey: .web))
+        case .curated:
+            self = .curated(try container.decode(Curated.self, forKey: .curated))
         }
     }
 
@@ -243,6 +266,9 @@ enum LibrarySource: Codable, Equatable {
         case .web(let value):
             try container.encode(SourceType.web, forKey: .type)
             try container.encode(value, forKey: .web)
+        case .curated(let value):
+            try container.encode(SourceType.curated, forKey: .type)
+            try container.encode(value, forKey: .curated)
         }
     }
 }

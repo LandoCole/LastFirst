@@ -12,7 +12,6 @@ struct AppSettings: Codable {
     var defaultReadingMode: ReadingMode
     var dialStyle: DialStyle
     var autoHideDialDelay: AutoHideDialDelay
-    var appAppearanceMode: AppearanceMode
 
     init(
         fontSize: CGFloat = 32,
@@ -24,8 +23,7 @@ struct AppSettings: Codable {
         paragraphBreathMs: Int = 250,
         defaultReadingMode: ReadingMode = .spritz,
         dialStyle: DialStyle = .radial,
-        autoHideDialDelay: AutoHideDialDelay = .off,
-        appAppearanceMode: AppearanceMode = .system
+        autoHideDialDelay: AutoHideDialDelay = .off
     ) {
         self.fontSize = fontSize
         self.appearanceMode = appearanceMode
@@ -37,7 +35,6 @@ struct AppSettings: Codable {
         self.defaultReadingMode = defaultReadingMode
         self.dialStyle = dialStyle
         self.autoHideDialDelay = autoHideDialDelay
-        self.appAppearanceMode = appAppearanceMode
     }
 
     enum CodingKeys: String, CodingKey {
@@ -51,7 +48,7 @@ struct AppSettings: Codable {
         case defaultReadingMode
         case dialStyle
         case autoHideDialDelay
-        case appAppearanceMode
+        case appAppearanceMode // kept for migration decoding
         case isDarkMode
     }
 
@@ -60,7 +57,7 @@ struct AppSettings: Codable {
         let legacyIsDarkMode = try container.decodeIfPresent(Bool.self, forKey: .isDarkMode)
 
         let fontSize = try container.decodeIfPresent(CGFloat.self, forKey: .fontSize) ?? 32
-        let appearanceMode = try container.decodeIfPresent(AppearanceMode.self, forKey: .appearanceMode)
+        var appearanceMode = try container.decodeIfPresent(AppearanceMode.self, forKey: .appearanceMode)
             ?? (legacyIsDarkMode == true ? .dark : .system)
         let readerBrightness = try container.decodeIfPresent(Double.self, forKey: .readerBrightness) ?? 0.8
         let readerThemeSettings = try container.decodeIfPresent(ReaderThemeSettings.self, forKey: .readerThemeSettings)
@@ -71,7 +68,13 @@ struct AppSettings: Codable {
         let defaultReadingMode = try container.decodeIfPresent(ReadingMode.self, forKey: .defaultReadingMode) ?? .spritz
         let dialStyle = try container.decodeIfPresent(DialStyle.self, forKey: .dialStyle) ?? .radial
         let autoHideDialDelay = try container.decodeIfPresent(AutoHideDialDelay.self, forKey: .autoHideDialDelay) ?? .off
-        let appAppearanceMode = try container.decodeIfPresent(AppearanceMode.self, forKey: .appAppearanceMode) ?? .system
+
+        // Migration: if the old appAppearanceMode was set to a non-system value
+        // and appearanceMode is still .system, adopt the app-level preference
+        let legacyAppMode = try container.decodeIfPresent(AppearanceMode.self, forKey: .appAppearanceMode)
+        if appearanceMode == .system, let legacyAppMode, legacyAppMode != .system {
+            appearanceMode = legacyAppMode
+        }
 
         self.init(
             fontSize: fontSize,
@@ -83,8 +86,7 @@ struct AppSettings: Codable {
             paragraphBreathMs: paragraphBreathMs,
             defaultReadingMode: defaultReadingMode,
             dialStyle: dialStyle,
-            autoHideDialDelay: autoHideDialDelay,
-            appAppearanceMode: appAppearanceMode
+            autoHideDialDelay: autoHideDialDelay
         )
     }
 
@@ -100,7 +102,6 @@ struct AppSettings: Codable {
         try container.encode(defaultReadingMode, forKey: .defaultReadingMode)
         try container.encode(dialStyle, forKey: .dialStyle)
         try container.encode(autoHideDialDelay, forKey: .autoHideDialDelay)
-        try container.encode(appAppearanceMode, forKey: .appAppearanceMode)
     }
 }
 

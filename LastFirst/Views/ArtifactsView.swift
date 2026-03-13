@@ -80,7 +80,7 @@ struct ArtifactsView: View {
                     footnotesContent
                 }
             }
-            .background(Color(UIColor.systemBackground))
+            .background(Color.warmBackground)
             .navigationTitle("Artifacts")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

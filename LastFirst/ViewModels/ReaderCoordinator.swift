@@ -19,6 +19,7 @@ class ReaderCoordinator: ObservableObject {
     @Published var loadingError: String?
 
     private(set) var metricsTracker: ReadingMetricsTracker?
+    private var loadingTask: Task<Void, Never>?
     var syncService: ReadingMetricsSyncService?
 
     func openItem(_ item: LibraryItem, appState: AppState) {
@@ -58,7 +59,8 @@ class ReaderCoordinator: ObservableObject {
         updatedItem.lastOpenedAt = Date()
         appState.updateItem(updatedItem)
 
-        Task {
+        loadingTask?.cancel()
+        loadingTask = Task {
             await loadContent(for: item, vm: vm, appState: appState)
         }
     }
@@ -103,6 +105,8 @@ class ReaderCoordinator: ObservableObject {
         }
         viewModel?.pause()
         finalizeCurrentSession()
+        loadingTask?.cancel()
+        loadingTask = nil
         viewModel = nil
         activeItem = nil
         canonicalPackages = nil
@@ -180,6 +184,12 @@ class ReaderCoordinator: ObservableObject {
             return .localFile(.init(url: local.fileURL, fileType: local.fileType))
         case .web(let web):
             return .web(.init(url: web.url, lastRefreshedAt: web.lastRefreshedAt))
+        case .curated(let curated):
+            if let sourceUrl = curated.sourceUrl {
+                return .web(.init(url: sourceUrl))
+            }
+            // Fallback: use a placeholder URL — curated items may not be locally available yet
+            return .web(.init(url: URL(string: "about:blank")!))
         }
     }
 
@@ -196,6 +206,123 @@ class ReaderCoordinator: ObservableObject {
         updatedItem.lastOpenedAt = Date()
         updatedItem.lastChapterTitle = vm.currentChapter?.title
         appState.updateItem(updatedItem)
+    }
+
+    // MARK: - Summarized Content
+
+    func openSummarizedContent(text: String, title: String, sourceUrl: URL?, appState: AppState) {
+        // Create a synthetic LibraryItem for the summary
+        let documentId = UUID()
+        let source: LibrarySource
+        if let sourceUrl {
+            source = .web(.init(url: sourceUrl))
+        } else {
+            source = .web(.init(url: URL(string: "about:blank")!))
+        }
+
+        let item = LibraryItem(
+            documentId: documentId,
+            source: source,
+            title: "\(title) (Summary)",
+            author: nil,
+            wordCount: text.split(separator: " ").count,
+            downloadState: .downloaded
+        )
+        appState.addItem(item)
+
+        // Build a minimal CanonicalDocumentPackages from the summary text
+        loadingTask?.cancel()
+        loadingTask = Task {
+            let packages = buildSyntheticPackages(text: text, title: title, documentId: documentId)
+
+            // Finalize previous session
+            finalizeCurrentSession()
+
+            let vm = ReadingViewModel()
+            self.viewModel = vm
+            self.activeItem = item
+            self.canonicalPackages = packages
+            self.coverImageData = nil
+            self.presentationState = .expanded
+
+            let tracker = ReadingMetricsTracker(
+                documentId: documentId,
+                startTokenIndex: 0,
+                readingMode: appState.settings.defaultReadingMode
+            )
+            self.metricsTracker = tracker
+            vm.metricsTracker = tracker
+
+            let readerDocument = CanonicalDocumentAdapter.buildReaderDocument(
+                from: packages,
+                source: .web(.init(url: URL(string: "about:blank")!)),
+                ingestionVersion: DocumentIngestionService.currentIngestionVersion
+            )
+
+            vm.loadContent(
+                tokens: readerDocument.tokens,
+                chapters: readerDocument.chapters,
+                blocks: readerDocument.blocks,
+                startTokenIndex: 0
+            )
+
+            vm.wordsPerMinute = appState.settings.defaultWPM
+            vm.setSoftStartPercentage(appState.settings.softStartPercentage)
+            vm.setParagraphBreathMs(appState.settings.paragraphBreathMs)
+            vm.readingMode = appState.settings.defaultReadingMode
+
+            if vm.readingMode == .stream {
+                vm.initializeStreamMode()
+            }
+        }
+    }
+
+    private func buildSyntheticPackages(text: String, title: String, documentId: UUID) -> CanonicalDocumentPackages {
+        let unit = ReadingUnit(id: "summary", title: title, kind: .article, order: 0)
+        let segment = ContentSegment(
+            id: "segment-0",
+            unitID: "summary",
+            anchorID: "anchor-0",
+            kind: .paragraphGroup,
+            order: 0,
+            text: text,
+            textRange: TextRange(start: 0, end: text.count)
+        )
+        let anchor = AnchorRecord(id: "anchor-0", unitID: "summary", progress: 0, segmentID: "segment-0")
+
+        let textAnchors = TextAnchorsPackage(
+            plainText: text,
+            units: [unit],
+            segments: [segment],
+            anchors: [anchor],
+            parserVersion: 2,
+            normalizerVersion: 1,
+            segmenterVersion: 1
+        )
+
+        let manifest = DocumentManifest(
+            id: documentId,
+            title: title,
+            authors: [],
+            languageCode: nil,
+            identifiers: [],
+            documentType: .web,
+            parserVersion: 2,
+            normalizerVersion: 1,
+            segmenterVersion: 1
+        )
+
+        let renderPackage = RenderPackage(
+            format: .html,
+            baseURL: URL(string: "reader-resource://\(documentId.uuidString)/")!,
+            units: [RenderUnit(unitID: "summary", entryPath: "index.html", title: title)]
+        )
+
+        return CanonicalDocumentPackages(
+            manifest: manifest,
+            renderPackage: renderPackage,
+            textAnchorsPackage: textAnchors
+        )
     }
 
     // MARK: - Metrics

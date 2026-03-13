@@ -9,18 +9,57 @@ struct ReadingStatsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    todaySection
+                    Divider().padding(.horizontal, 20)
                     summaryGrid
                     dailyChart
                     recentSessionsList
                 }
                 .padding(.vertical, 16)
             }
+            .task { await statsVM.load() }
             .navigationTitle("Reading Stats")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+        }
+    }
+
+    // MARK: - Today Section
+
+    private var todaySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Today")
+                .font(.hedvigLettersSerif(20))
+                .padding(.horizontal, 20)
+
+            HStack(spacing: 12) {
+                SummaryStatCard(
+                    icon: "clock.fill",
+                    iconColor: .blue,
+                    value: formatReadingTime(statsVM.todayReadingSeconds),
+                    label: "Reading Time"
+                )
+                SummaryStatCard(
+                    icon: "text.word.spacing",
+                    iconColor: .purple,
+                    value: formatWordsCompact(statsVM.todayWordsRead),
+                    label: "Words Read"
+                )
+            }
+            .padding(.horizontal, 20)
+
+            if !statsVM.todaySessions.isEmpty {
+                Text("Sessions")
+                    .font(.rethinkSans(14, weight: .medium))
+                    .padding(.horizontal, 20)
+                ForEach(statsVM.todaySessions, id: \.id) { session in
+                    SessionRow(session: session, title: statsVM.resolveTitle(for: session.documentId))
+                }
+                .padding(.horizontal, 20)
             }
         }
     }
@@ -187,7 +226,7 @@ struct ReadingStatsSheet: View {
 
 // MARK: - SummaryStatCard
 
-private struct SummaryStatCard: View {
+struct SummaryStatCard: View {
     let icon: String
     let iconColor: Color
     let value: String
@@ -216,7 +255,7 @@ private struct SummaryStatCard: View {
 
 // MARK: - SessionRow
 
-private struct SessionRow: View {
+struct SessionRow: View {
     let session: ReadingSessionRecord
     let title: String
 

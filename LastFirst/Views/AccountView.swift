@@ -74,7 +74,7 @@ struct AccountView: View {
 
             // Appearance
             Section("Appearance") {
-                Picker("Appearance", selection: $appState.settings.appAppearanceMode) {
+                Picker("Appearance", selection: $appState.settings.appearanceMode) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
                     }

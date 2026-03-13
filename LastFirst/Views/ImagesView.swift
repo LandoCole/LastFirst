@@ -19,7 +19,7 @@ struct ImagesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(UIColor.systemBackground)
+                Color.warmBackground
                     .ignoresSafeArea()
 
                 if images.isEmpty {

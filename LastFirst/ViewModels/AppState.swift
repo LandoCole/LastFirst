@@ -16,20 +16,25 @@ class AppState: ObservableObject {
         didSet { saveSavedImages() }
     }
     @Published var lastError: AppError?
+    @Published var readingLists: [ReadingList] {
+        didSet { saveReadingLists() }
+    }
+    @Published var isLoaded = false
 
     private let settingsKey = "app_settings"
     private let libraryKey = "library"
     private let annotationsKey = "annotations_v1"
     private let imagesKey = "saved_images_v2"
+    private let readingListsKey = "reading_lists"
     private let imageStorage = ImageStorageManager.shared
     private var dominantColorCache: [UUID: UIColor] = [:]
-    
+
     // MARK: - Error Types
     enum AppError: Error, LocalizedError {
         case persistenceError(String)
         case fileAccessError(String)
         case migrationError(String)
-        
+
         var errorDescription: String? {
             switch self {
             case .persistenceError(let msg):
@@ -48,9 +53,11 @@ class AppState: ObservableObject {
         self.annotations = Self.loadAnnotations()
         self.savedImages = Self.loadSavedImages()
         self.footnotes = Self.loadFootnotes()
-        
+        self.readingLists = Self.loadReadingLists()
+
         // Migrate old image data if needed
         migrateImageDataIfNeeded()
+        isLoaded = true
     }
     
     // MARK: - Migration
@@ -416,5 +423,98 @@ class AppState: ObservableObject {
             )
             addFootnote(footnote)
         }
+    }
+
+    // MARK: - Curated Items
+
+    @discardableResult
+    func addCuratedItem(_ curationItem: CurationItem) -> LibraryItem {
+        let coverUrl: URL? = {
+            if let urlString = curationItem.content?.coverUrl {
+                return URL(string: urlString)
+            }
+            return nil
+        }()
+        let sourceUrl: URL? = {
+            if let urlString = curationItem.externalUrl ?? curationItem.content?.sourceUrl {
+                return URL(string: urlString)
+            }
+            return nil
+        }()
+
+        let item = LibraryItem(
+            documentId: UUID(),
+            source: .curated(.init(
+                contentId: curationItem.contentId ?? curationItem.id,
+                sourceUrl: sourceUrl,
+                coverUrl: coverUrl,
+                fileType: curationItem.content?.fileType ?? curationItem.itemType
+            )),
+            title: curationItem.displayTitle,
+            author: curationItem.displayAuthor,
+            wordCount: curationItem.content?.wordCount,
+            downloadState: .notDownloaded
+        )
+        addItem(item)
+        return item
+    }
+
+    @discardableResult
+    func addCuratedItems(_ items: [CurationItem]) -> [LibraryItem] {
+        items.map { addCuratedItem($0) }
+    }
+
+    // MARK: - Reading Lists
+
+    private static func loadReadingLists() -> [ReadingList] {
+        guard let data = UserDefaults.standard.data(forKey: "reading_lists") else {
+            return []
+        }
+        do {
+            return try JSONDecoder().decode([ReadingList].self, from: data)
+        } catch {
+            print("[AppState] Failed to decode reading lists: \(error)")
+            return []
+        }
+    }
+
+    private func saveReadingLists() {
+        do {
+            let data = try JSONEncoder().encode(readingLists)
+            UserDefaults.standard.set(data, forKey: readingListsKey)
+        } catch {
+            lastError = .persistenceError("Reading lists: \(error.localizedDescription)")
+        }
+    }
+
+    @discardableResult
+    func addReadingList(name: String) -> ReadingList {
+        let list = ReadingList(name: name)
+        readingLists.append(list)
+        return list
+    }
+
+    func addItemToList(_ itemId: UUID, listId: UUID) {
+        guard let index = readingLists.firstIndex(where: { $0.id == listId }) else { return }
+        guard !readingLists[index].itemIds.contains(itemId) else { return }
+        readingLists[index].itemIds.append(itemId)
+        readingLists[index].updatedAt = Date()
+    }
+
+    func removeItemFromList(_ itemId: UUID, listId: UUID) {
+        guard let index = readingLists.firstIndex(where: { $0.id == listId }) else { return }
+        readingLists[index].itemIds.removeAll { $0 == itemId }
+        readingLists[index].updatedAt = Date()
+    }
+
+    func updateReadingList(id: UUID, name: String, itemIds: [UUID]) {
+        guard let index = readingLists.firstIndex(where: { $0.id == id }) else { return }
+        readingLists[index].name = name
+        readingLists[index].itemIds = itemIds
+        readingLists[index].updatedAt = Date()
+    }
+
+    func deleteReadingList(_ listId: UUID) {
+        readingLists.removeAll { $0.id == listId }
     }
 }

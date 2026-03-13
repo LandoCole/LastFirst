@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BookCoverView: View {
     let coverImageData: Data?
+    var coverURL: URL? = nil    // For curated/network content
     let title: String
     let iconName: String
     var size: CGSize = CGSize(width: 116, height: 169)
@@ -28,18 +29,24 @@ struct BookCoverView: View {
                             .resizable()
                             .scaledToFill()
                     }
-                } else {
-                    VStack(spacing: 6) {
-                        Image(systemName: iconName)
-                            .font(.system(size: iconSize))
-                            .foregroundColor(.white.opacity(0.8))
-                        Text(title)
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.9))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 8)
+                } else if let coverURL {
+                    AsyncImage(url: coverURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        case .failure:
+                            placeholderContent
+                        case .empty:
+                            ProgressView()
+                                .scaleEffect(0.6)
+                        @unknown default:
+                            placeholderContent
+                        }
                     }
+                } else {
+                    placeholderContent
                 }
             }
             .frame(width: size.width, height: size.height)
@@ -64,14 +71,22 @@ struct BookCoverView: View {
         }
     }
 
+    private var placeholderContent: some View {
+        VStack(spacing: 6) {
+            Image(systemName: iconName)
+                .font(.system(size: iconSize))
+                .foregroundColor(.white.opacity(0.8))
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.9))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+        }
+    }
+
     private var placeholderColor: Color {
-        let colors: [Color] = [
-            Color(hex: "3C5A5E"),
-            Color(hex: "5E3C4A"),
-            Color(hex: "4A5E3C"),
-            Color(hex: "3C4A5E"),
-            Color(hex: "5E4A3C"),
-        ]
+        let colors = Color.fallbackCoverPalette.map { Color(hex: $0) }
         let index = abs(title.hashValue) % colors.count
         return colors[index]
     }

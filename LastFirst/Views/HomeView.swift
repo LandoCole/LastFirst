@@ -6,254 +6,552 @@ struct HomeView: View {
     @EnvironmentObject var readerCoordinator: ReaderCoordinator
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.modelContext) private var modelContext
-    @State private var showPastCurations = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showStatsSheet = false
-    @State private var currentContinuePage: Int? = 0
-    @State private var previewContext: BookPreviewContext? = nil
+    @State private var showDatePicker = false
+    @State private var selectedDate = Date()
     @State private var statsVM: ReadingStatsViewModel?
-    @State private var catalogVM = CatalogViewModel()
-    @State private var selectedCatalogItem: CatalogItem?
+    @State private var timelineVM: HomeTimelineViewModel?
+    @State private var selectedCurationItem: CurationItem?
+    @State private var curationPreviewContext: CurationPreviewContext?
+    @State private var showAccount: Bool = false
     @Namespace private var homeGlassNamespace
 
+    // Paging state
+    @State private var currentDayPage: UUID?
+    @State private var currentSectionTitle: String = "Today's Curation"
+    @State private var hasScrolledToToday = false
+    private let statsPageId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+
+    // Cover carousel state
+    @State private var carouselCenters: [UUID: Int] = [:]
+
+    var scrollToTodayTrigger: Bool = false
     var onNavigateToCurator: (() -> Void)?
-
-    // MARK: - Filtered Data
-
-    private var continueReadingItems: [LibraryItem] {
-        appState.library
-            .filter { $0.lastOpenedAt != nil && $0.progress.percentComplete > 0 && $0.progress.percentComplete < 100 }
-            .sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
-    }
-
-    private var quickReads: [LibraryItem] {
-        let withCount = appState.library.filter { $0.wordCount != nil }
-        if withCount.isEmpty {
-            return Array(appState.library
-                .filter { $0.progress.percentComplete == 0 }
-                .prefix(6))
-        }
-        let sorted = withCount.sorted { ($0.wordCount ?? 0) < ($1.wordCount ?? 0) }
-        return Array(sorted.prefix(sorted.count / 2 + 1))
-    }
-
-    private var greatReads: [LibraryItem] {
-        let withCount = appState.library.filter { $0.wordCount != nil }
-        guard !withCount.isEmpty else { return [] }
-        let sorted = withCount.sorted { ($0.wordCount ?? 0) < ($1.wordCount ?? 0) }
-        let midpoint = sorted.count / 2 + 1
-        guard midpoint < sorted.count else { return [] }
-        return Array(sorted.suffix(from: midpoint))
-    }
 
     // MARK: - Body
 
     var body: some View {
-        ScrollView {
-            if appState.library.isEmpty {
+        ZStack {
+            if appState.library.isEmpty && (timelineVM?.dayCurations.isEmpty ?? true) {
                 emptyState
             } else {
-                VStack(alignment: .leading, spacing: 32) {
-                    todaysCurationSection
-                    if !continueReadingItems.isEmpty {
-                        continueSection
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        if let vm = timelineVM {
+                            ForEach(vm.dayCurations) { day in
+                                dayCurationSection(day)
+                                    .containerRelativeFrame(.vertical)
+                                    .id(day.id)
+                            }
+                        }
+
+                        // Stats page — scrolling down past today reveals this
+                        if let statsVM {
+                            inlineStatsPage(statsVM: statsVM)
+                                .containerRelativeFrame(.vertical)
+                                .id(statsPageId)
+                        }
                     }
-                    if let statsVM {
-                        ReadingStatsSection(statsVM: statsVM, showStatsSheet: $showStatsSheet)
-                    }
-                    if !catalogVM.items.isEmpty {
-                        discoverSection
-                    }
-                    if !quickReads.isEmpty {
-                        bookShelfSection(title: "Quick Reads", items: quickReads)
-                    }
-                    if !greatReads.isEmpty {
-                        bookShelfSection(title: "Great Reads", items: greatReads)
-                    }
+                    .scrollTargetLayout()
                 }
-                .padding(.vertical, 16)
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentDayPage)
+            }
+        }
+        .overlay(alignment: .top) {
+            if !(appState.library.isEmpty && (timelineVM?.dayCurations.isEmpty ?? true)) {
+                HStack {
+                    Button { showAccount = true } label: {
+                        accountAvatar
+                    }
+                    .buttonStyle(.plain)
+
+                    Text(currentSectionTitle)
+                        .font(.hedvigLettersSerif(24))
+                    Spacer()
+
+                    Button { showDatePicker = true } label: {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(item: $previewContext) { context in
-            BookPreviewSheet(
-                items: context.items,
-                initialIndex: context.initialIndex
-            )
-            .presentationDragIndicator(.hidden)
-            .presentationCornerRadius(0)
-            .presentationBackground(.clear)
-            .environmentObject(appState)
-            .environmentObject(readerCoordinator)
+        .onChange(of: currentDayPage) {
+            updateSectionTitle()
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active {
+                Task { await statsVM?.load() }
+            }
         }
         .task {
             if statsVM == nil {
                 let userId = authVM.currentUser?.id.uuidString ?? "local"
                 statsVM = ReadingStatsViewModel(modelContext: modelContext, appState: appState, userId: userId)
             }
+            if timelineVM == nil, let userId = authVM.currentUser?.id {
+                timelineVM = HomeTimelineViewModel(userId: userId)
+            }
             await statsVM?.load()
-            await catalogVM.load()
+            await timelineVM?.load()
+
+            // Scroll to today on first load
+            if !hasScrolledToToday, let todayId = timelineVM?.todayCurationId {
+                hasScrolledToToday = true
+                try? await Task.sleep(for: .milliseconds(300))
+                currentDayPage = todayId
+            }
         }
         .onAppear {
             Task { await statsVM?.load() }
+        }
+        .onChange(of: scrollToTodayTrigger) {
+            if let todayId = timelineVM?.todayCurationId {
+                withAnimation {
+                    currentDayPage = todayId
+                }
+            }
         }
         .sheet(isPresented: $showStatsSheet) {
             if let statsVM {
                 ReadingStatsSheet(statsVM: statsVM)
             }
         }
-        .sheet(item: $selectedCatalogItem) { item in
-            CatalogPreviewSheet(item: item)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+        .sheet(isPresented: $showAccount) {
+            AccountView()
         }
-        .sheet(isPresented: $showPastCurations) {
-            NavigationStack {
-                Text("Past Curations")
-                    .font(.hedvigLettersSerif(24))
-                    .navigationTitle("Past Curations")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showPastCurations = false }
+        .sheet(isPresented: $showDatePicker) {
+            datePickerSheet
+        }
+        .sheet(item: $selectedCurationItem) { item in
+            CurationItemDetailSheet(
+                item: item,
+                userId: authVM.currentUser?.id,
+                onSave: { curationItem in
+                    appState.addCuratedItem(curationItem)
+                    Task {
+                        try? await SupabaseManager.shared.markCurationItemSaved(itemId: curationItem.id)
+                        if let contentId = curationItem.contentId, let userId = authVM.currentUser?.id {
+                            try? await SupabaseManager.shared.postInteraction(
+                                userId: userId,
+                                contentId: contentId,
+                                kind: "bookmark"
+                            )
                         }
                     }
-            }
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $curationPreviewContext) { context in
+            CurationPreviewSheet(
+                items: context.items,
+                initialIndex: context.initialIndex,
+                onSelectItem: { item in
+                    curationPreviewContext = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        selectedCurationItem = item
+                    }
+                }
+            )
+            .presentationDragIndicator(.hidden)
+            .presentationCornerRadius(0)
+            .presentationBackground(.clear)
         }
     }
 
-    // MARK: - Today's Curation
+    // MARK: - Day Curation Section
 
-    private var todaysCurationSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header with glass buttons
-            HStack {
-                Text("Today's Curation")
-                    .font(.hedvigLettersSerif(24))
+    @ViewBuilder
+    private func dayCurationSection(_ day: DayCuration) -> some View {
+        let items = day.items
+
+        VStack(spacing: 0) {
+            if !items.isEmpty {
+                // Summary text — scrollable within the page
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        if let summary = day.curation.summary, !summary.isEmpty {
+                            Text(summary)
+                                .font(.rethinkSans(16))
+                                .foregroundStyle(.primary.opacity(0.85))
+                                .lineSpacing(6)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 72)
+                }
+
+                Spacer(minLength: 20)
+
+                // 3-item focused cover carousel
+                curationCoverCarousel(for: items, dayId: day.id)
+
+                Spacer().frame(height: 100)
+            } else {
+                // Empty curation placeholder
                 Spacer()
-
-                Button { showPastCurations = true } label: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .frame(width: 28, height: 28)
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                    Text("Your daily curation is being prepared...")
+                        .font(.rethinkSans(14))
+                        .foregroundStyle(.secondary)
                 }
-                .nativeGlassButton(shape: .circle)
-                .conditionalGlassEffectID("calendarBtn", in: homeGlassNamespace)
+                Spacer()
             }
-            .padding(.horizontal, 20)
-
-            // Dot matrix placeholder
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(hex: "EBEAE4"))
-                .frame(height: 310)
-                .padding(.horizontal, 20)
-
         }
-    }
-
-    // MARK: - Continue
-
-    private var continueSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Continue")
-                .font(.hedvigLettersSerif(20))
-                .padding(.horizontal, 20)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 0) {
-                    ForEach(Array(continueReadingItems.enumerated()), id: \.element.id) { index, item in
-                        ContinueCard(item: item, appState: appState)
-                            .padding(.horizontal, 20)
-                            .containerRelativeFrame(.horizontal)
-                            .onTapGesture {
-                                readerCoordinator.openItem(item, appState: appState)
-                            }
-                            .id(index)
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $currentContinuePage)
-
-            if continueReadingItems.count > 1 {
-                HStack(spacing: 8) {
-                    ForEach(0..<continueReadingItems.count, id: \.self) { index in
-                        Circle()
-                            .fill(index == currentContinuePage ? Color.primary : Color.secondary.opacity(0.3))
-                            .frame(width: 7, height: 7)
-                    }
-                }
-                .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .onAppear {
+            // Load earlier pages when first page appears
+            if let vm = timelineVM, day.id == vm.dayCurations.first?.id {
+                Task { await vm.loadEarlier() }
             }
         }
     }
 
-    // MARK: - Book Shelf (Quick Reads / Great Reads)
+    // MARK: - 3-Item Focused Cover Carousel
 
-    private func bookShelfSection(title: String, items: [LibraryItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(title)
-                    .font(.hedvigLettersSerif(20))
-                Image(systemName: "chevron.forward")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 20)
+    @ViewBuilder
+    private func curationCoverCarousel(for items: [CurationItem], dayId: UUID) -> some View {
+        let sorted = items.sorted { a, b in
+            let aHasCover = a.content?.coverUrl != nil
+            let bHasCover = b.content?.coverUrl != nil
+            if aHasCover != bHasCover { return aHasCover }
+            return a.position < b.position
+        }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 12) {
-                    ForEach(items) { item in
-                        bookCover(item: item)
+        if sorted.isEmpty { EmptyView() }
+        else {
+            let centerIdx = (carouselCenters[dayId] ?? 0) % sorted.count
+            let visibleSlots: [(pos: Int, item: CurationItem, idx: Int)] = {
+                var slots: [(Int, CurationItem, Int)] = []
+                slots.append((0, sorted[centerIdx], centerIdx))
+                if sorted.count > 1 {
+                    let leftIdx = (centerIdx - 1 + sorted.count) % sorted.count
+                    slots.append((-1, sorted[leftIdx], leftIdx))
+                }
+                if sorted.count > 2 {
+                    let rightIdx = (centerIdx + 1) % sorted.count
+                    slots.append((1, sorted[rightIdx], rightIdx))
+                }
+                return slots
+            }()
+
+            VStack(spacing: 0) {
+                ZStack {
+                    ForEach(visibleSlots, id: \.item.id) { pos, item, idx in
+                        coverThumbnail(item: item, width: 51, height: 75)
+                            .scaleEffect(pos == 0 ? 1.0 : 0.75)
+                            .opacity(pos == 0 ? 1.0 : 0.5)
+                            .offset(x: CGFloat(pos) * 70)
+                            .zIndex(pos == 0 ? 1 : 0)
                             .onTapGesture {
-                                if let idx = items.firstIndex(where: { $0.id == item.id }) {
-                                    previewContext = BookPreviewContext(items: items, initialIndex: idx)
+                                if pos == 0 {
+                                    curationPreviewContext = CurationPreviewContext(
+                                        items: sorted,
+                                        initialIndex: centerIdx
+                                    )
+                                } else {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        carouselCenters[dayId] = idx
+                                    }
                                 }
                             }
                     }
                 }
-                .padding(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
-            }
-        }
-    }
-
-    private func bookCover(item: LibraryItem) -> some View {
-        BookCoverView(
-            coverImageData: appState.getCoverImage(for: item.documentId),
-            title: item.title,
-            iconName: item.coverIconName,
-            ribbonState: item.ribbonState
-        )
-        .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-    }
-
-    // MARK: - Discover (Catalog)
-
-    private var discoverSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Discover")
-                    .font(.hedvigLettersSerif(20))
-                Image(systemName: "chevron.forward")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 20)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 12) {
-                    ForEach(catalogVM.items) { item in
-                        CatalogCoverView(item: item)
-                            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-                            .onTapGesture {
-                                selectedCatalogItem = item
+                .frame(maxWidth: .infinity, minHeight: 80)
+                .contentShape(Rectangle())
+                .animation(.easeInOut(duration: 0.3), value: carouselCenters[dayId])
+                .gesture(
+                    DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                        .onEnded { value in
+                            guard sorted.count > 1 else { return }
+                            let current = carouselCenters[dayId] ?? 0
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                if value.translation.width < 0 {
+                                    carouselCenters[dayId] = (current + 1) % sorted.count
+                                } else {
+                                    carouselCenters[dayId] = (current - 1 + sorted.count) % sorted.count
+                                }
                             }
+                        }
+                )
+                .onAppear {
+                    if carouselCenters[dayId] == nil {
+                        carouselCenters[dayId] = 0
                     }
                 }
-                .padding(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
             }
         }
+    }
+
+    @ViewBuilder
+    private func coverThumbnail(item: CurationItem, width: CGFloat, height: CGFloat) -> some View {
+        if let urlString = item.content?.coverUrl, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: width, height: height)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                case .failure:
+                    fallbackCover(title: item.displayTitle, width: width, height: height)
+                default:
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.1))
+                        .frame(width: width, height: height)
+                }
+            }
+            .id(urlString)
+        } else {
+            fallbackCover(title: item.displayTitle, width: width, height: height)
+        }
+    }
+
+    private func fallbackCover(title: String, width: CGFloat, height: CGFloat) -> some View {
+        let colors = Color.fallbackCoverPalette.map { Color(hex: $0) }
+        let index = abs(title.hashValue) % colors.count
+        return RoundedRectangle(cornerRadius: 4)
+            .fill(colors[index])
+            .frame(width: width, height: height)
+    }
+
+    // MARK: - Section Title Tracking
+
+    private func updateSectionTitle() {
+        guard let vm = timelineVM, let pageId = currentDayPage else {
+            currentSectionTitle = "Today's Curation"
+            return
+        }
+
+        if pageId == statsPageId {
+            currentSectionTitle = "Reading Stats"
+        } else if let day = vm.dayCurations.first(where: { $0.id == pageId }) {
+            if day.isToday {
+                currentSectionTitle = "Today's Curation"
+            } else {
+                currentSectionTitle = formatDateHeader(day.date)
+            }
+        } else {
+            currentSectionTitle = "Today's Curation"
+        }
+    }
+
+    // MARK: - Date Picker Sheet
+
+    private var datePickerSheet: some View {
+        NavigationStack {
+            DatePicker("Jump to date", selection: $selectedDate, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .padding(20)
+                .navigationTitle("Jump to Date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showDatePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Go") {
+                            showDatePicker = false
+                            scrollToDate(selectedDate)
+                        }
+                    }
+                }
+        }
+        .presentationDetents([.medium])
+    }
+
+    // MARK: - Helpers
+
+    private func formatDateHeader(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today's Curation" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .weekOfYear) {
+            let f = DateFormatter()
+            f.dateFormat = "EEEE"
+            return f.string(from: date)
+        }
+        let day = calendar.component(.day, from: date)
+        let f = DateFormatter()
+        f.dateFormat = "MMMM"
+        let month = f.string(from: date)
+        let suffix = ordinalSuffix(for: day)
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
+            return "\(month) \(day)\(suffix)"
+        }
+        return "\(month) \(day)\(suffix), \(calendar.component(.year, from: date))"
+    }
+
+    private func ordinalSuffix(for day: Int) -> String {
+        switch day {
+        case 11, 12, 13: return "th"
+        default:
+            switch day % 10 {
+            case 1: return "st"
+            case 2: return "nd"
+            case 3: return "rd"
+            default: return "th"
+            }
+        }
+    }
+
+    private func scrollToDate(_ date: Date) {
+        guard let vm = timelineVM else { return }
+        let calendar = Calendar.current
+        if let match = vm.dayCurations.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            withAnimation {
+                currentDayPage = match.id
+            }
+        }
+    }
+
+    // MARK: - Account Avatar
+
+    private var userInitials: String {
+        guard let name = authVM.userProfile?.displayName else { return "?" }
+        let parts = name.split(separator: " ")
+        let initials = parts.prefix(2).compactMap { $0.first }.map(String.init)
+        return initials.joined().uppercased()
+    }
+
+    private var accountAvatar: some View {
+        Circle()
+            .fill(Color.darkGold)
+            .frame(width: 36, height: 36)
+            .overlay {
+                Text(userInitials)
+                    .font(.hedvigLettersSerif(13))
+                    .foregroundStyle(.white)
+            }
+            .overlay {
+                Circle().stroke(Color.goldAccent, lineWidth: 1.5)
+            }
+            .nativeGlassButton(shape: .circle)
+            .conditionalGlassEffectID("accountAvatar", in: homeGlassNamespace)
+    }
+
+    // MARK: - Inline Stats Page
+
+    private func inlineStatsPage(statsVM: ReadingStatsViewModel) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                // Today section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Today")
+                        .font(.hedvigLettersSerif(20))
+
+                    HStack(spacing: 12) {
+                        SummaryStatCard(
+                            icon: "clock.fill",
+                            iconColor: .blue,
+                            value: formatStatsTime(statsVM.todayReadingSeconds),
+                            label: "Reading Time"
+                        )
+                        SummaryStatCard(
+                            icon: "text.word.spacing",
+                            iconColor: .purple,
+                            value: formatStatsWords(statsVM.todayWordsRead),
+                            label: "Words Read"
+                        )
+                    }
+                }
+
+                Divider()
+
+                // Lifetime stats
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    SummaryStatCard(
+                        icon: "flame.fill",
+                        iconColor: .orange,
+                        value: "\(statsVM.statsCache?.currentStreak ?? 0)",
+                        label: "Current Streak"
+                    )
+                    SummaryStatCard(
+                        icon: "clock.fill",
+                        iconColor: .blue,
+                        value: formatStatsTime(statsVM.statsCache?.totalReadingSeconds ?? 0),
+                        label: "Total Time"
+                    )
+                    SummaryStatCard(
+                        icon: "speedometer",
+                        iconColor: .green,
+                        value: "\(statsVM.statsCache?.lifetimeAvgWPM ?? 0)",
+                        label: "Avg WPM"
+                    )
+                    SummaryStatCard(
+                        icon: "text.word.spacing",
+                        iconColor: .purple,
+                        value: formatStatsWords(statsVM.statsCache?.totalWordsRead ?? 0),
+                        label: "Words Read"
+                    )
+                    SummaryStatCard(
+                        icon: "books.vertical.fill",
+                        iconColor: .indigo,
+                        value: "\(statsVM.statsCache?.booksFinished ?? 0)",
+                        label: "Books"
+                    )
+                    SummaryStatCard(
+                        icon: "calendar",
+                        iconColor: .teal,
+                        value: "\(statsVM.statsCache?.daysRead ?? 0)",
+                        label: "Days Read"
+                    )
+                }
+
+                // "See more" button to open full stats sheet
+                Button {
+                    showStatsSheet = true
+                } label: {
+                    HStack {
+                        Text("View Full Stats")
+                            .font(.rethinkSans(15, weight: .medium))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundStyle(Color.goldAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 72)
+            .padding(.bottom, 40)
+        }
+        .task { await statsVM.load() }
+    }
+
+    private func formatStatsTime(_ seconds: Int) -> String {
+        if seconds == 0 { return "0m" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(max(minutes, 1))m" }
+        let hours = minutes / 60
+        let remainingMinutes = minutes % 60
+        if remainingMinutes == 0 { return "\(hours)h" }
+        return "\(hours)h \(remainingMinutes)m"
+    }
+
+    private func formatStatsWords(_ count: Int) -> String {
+        if count < 1000 { return "\(count)" }
+        if count < 100_000 { return String(format: "%.1fk", Double(count) / 1000.0) }
+        if count < 1_000_000 { return "\(count / 1000)k" }
+        return String(format: "%.1fM", Double(count) / 1_000_000.0)
     }
 
     // MARK: - Empty State

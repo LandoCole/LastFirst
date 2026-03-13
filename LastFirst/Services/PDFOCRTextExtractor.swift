@@ -4,9 +4,20 @@ import Vision
 import UIKit
 
 final class PDFOCRTextExtractor {
-    enum ExtractionError: Error {
+    enum ExtractionError: Error, LocalizedError {
         case invalidPDF
         case couldNotRenderPage
+        case passwordProtected
+        case ocrTimeout
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidPDF: return "The PDF file could not be opened."
+            case .couldNotRenderPage: return "A page in the PDF could not be rendered."
+            case .passwordProtected: return "This PDF is password-protected."
+            case .ocrTimeout: return "OCR processing timed out on a page."
+            }
+        }
     }
 
     private struct CacheEntry: Codable {
@@ -17,6 +28,8 @@ final class PDFOCRTextExtractor {
     }
 
     private let cacheFolderName = "pdf_ocr_cache_v1"
+    private let ocrTimeoutSeconds: UInt64 = 30
+    private let batchSize = 20
 
     func extractTextByPage(from url: URL) async throws -> [String] {
         let (fileSize, modTime) = try fileFingerprint(for: url)
@@ -29,44 +42,103 @@ final class PDFOCRTextExtractor {
             throw ExtractionError.invalidPDF
         }
 
+        // Detect encrypted/locked PDFs
+        if pdf.isEncrypted && pdf.isLocked {
+            throw ExtractionError.passwordProtected
+        }
+
         var pageTexts: [String] = []
         pageTexts.reserveCapacity(pdf.pageCount)
 
-        for pageIndex in 0..<pdf.pageCount {
-            guard let page = pdf.page(at: pageIndex) else {
-                pageTexts.append("")
-                continue
-            }
+        // Large PDF batching: process in groups to manage memory
+        let totalPages = pdf.pageCount
+        let useBatching = totalPages > 200
 
-            // Try native text layer first (much faster than OCR)
-            if let nativeText = page.string,
-               nativeText.trimmingCharacters(in: .whitespacesAndNewlines).count > 20 {
-                pageTexts.append(nativeText)
-                continue
+        if useBatching {
+            for batchStart in stride(from: 0, to: totalPages, by: batchSize) {
+                let batchEnd = min(batchStart + batchSize, totalPages)
+                let batchTexts = await extractBatch(pdf: pdf, from: batchStart, to: batchEnd)
+                pageTexts.append(contentsOf: batchTexts)
             }
-
-            // Fall back to OCR for scanned/image-only pages
-            let text = try await ocrText(for: page)
-            pageTexts.append(text)
+        } else {
+            for pageIndex in 0..<totalPages {
+                let text = await extractSinglePage(pdf: pdf, pageIndex: pageIndex)
+                pageTexts.append(text)
+            }
         }
 
         try saveCache(pageTexts, for: url, fileSize: fileSize, modTime: modTime)
         return pageTexts
     }
 
-    private func ocrText(for page: PDFPage) async throws -> String {
+    /// Extracts text for a batch of pages, yielding between batches to manage memory.
+    private func extractBatch(pdf: PDFDocument, from startIndex: Int, to endIndex: Int) async -> [String] {
+        var texts: [String] = []
+        texts.reserveCapacity(endIndex - startIndex)
+
+        for pageIndex in startIndex..<endIndex {
+            let text = await extractSinglePage(pdf: pdf, pageIndex: pageIndex)
+            texts.append(text)
+        }
+        // Yield to allow memory cleanup between batches
+        await Task.yield()
+        return texts
+    }
+
+    /// Extracts text from a single page with error isolation — one bad page doesn't fail the whole doc.
+    private func extractSinglePage(pdf: PDFDocument, pageIndex: Int) async -> String {
+        guard let page = pdf.page(at: pageIndex) else {
+            return ""
+        }
+
+        // Try native text layer first (much faster than OCR)
+        // Lowered threshold from 20 to 5 chars to reduce unnecessary OCR
+        if let nativeText = page.string,
+           nativeText.trimmingCharacters(in: .whitespacesAndNewlines).count > 5 {
+            return nativeText
+        }
+
+        // Fall back to OCR with timeout and error isolation
+        do {
+            return try await ocrTextWithTimeout(for: page)
+        } catch {
+            print("[PDFOCRTextExtractor] OCR failed for page \(pageIndex + 1): \(error)")
+            // Return native text even if short, or empty string
+            return page.string ?? ""
+        }
+    }
+
+    private func ocrTextWithTimeout(for page: PDFPage) async throws -> String {
+        // Render the image on the current context before entering the task group,
+        // since PDFPage is not Sendable.
         let maxDimension: CGFloat = 2200
         let image = page.thumbnail(of: CGSize(width: maxDimension, height: maxDimension), for: .mediaBox)
         guard let cgImage = image.cgImage else {
             throw ExtractionError.couldNotRenderPage
         }
 
-        let strings = try await recognizeStrings(in: cgImage)
-        return strings.joined(separator: " ")
+        let timeoutNanos = ocrTimeoutSeconds * 1_000_000_000
+        return try await withThrowingTaskGroup(of: String.self) { group in
+            group.addTask { [cgImage] in
+                let strings = try await PDFOCRTextExtractor.recognizeStrings(in: cgImage)
+                return strings.joined(separator: " ")
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutNanos)
+                throw ExtractionError.ocrTimeout
+            }
+
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
 
-    private func recognizeStrings(in cgImage: CGImage) async throws -> [String] {
+    private static func recognizeStrings(in cgImage: CGImage) async throws -> [String] {
         try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true

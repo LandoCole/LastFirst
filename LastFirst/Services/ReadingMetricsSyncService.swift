@@ -16,7 +16,11 @@ class ReadingMetricsSyncService {
     func persistSession(_ record: ReadingSessionRecord) {
         guard record.durationSeconds > 0, record.wordsRead > 0 else { return }
         modelContext.insert(record)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            print("[ReadingMetricsSyncService] Save session failed: \(error)")
+        }
     }
 
     // MARK: - Sync Lifecycle
@@ -49,14 +53,21 @@ class ReadingMetricsSyncService {
         do {
             userId = try await client.auth.session.user.id
         } catch {
+            print("[ReadingMetricsSyncService] Auth session unavailable: \(error)")
             return
         }
 
         let predicate = #Predicate<ReadingSessionRecord> { $0.isSynced == false }
         let descriptor = FetchDescriptor<ReadingSessionRecord>(predicate: predicate)
 
-        guard let unsyncedRecords = try? modelContext.fetch(descriptor),
-              !unsyncedRecords.isEmpty else { return }
+        let unsyncedRecords: [ReadingSessionRecord]
+        do {
+            unsyncedRecords = try modelContext.fetch(descriptor)
+        } catch {
+            print("[ReadingMetricsSyncService] Fetch unsynced records failed: \(error)")
+            return
+        }
+        guard !unsyncedRecords.isEmpty else { return }
 
         let dtos = unsyncedRecords.map { ReadingSessionDTO(from: $0, userId: userId) }
 
@@ -69,7 +80,11 @@ class ReadingMetricsSyncService {
             for record in unsyncedRecords {
                 record.isSynced = true
             }
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                print("[ReadingMetricsSyncService] Save after sync failed: \(error)")
+            }
         } catch {
             print("[ReadingMetricsSyncService] Push failed: \(error.localizedDescription)")
         }
@@ -84,6 +99,7 @@ class ReadingMetricsSyncService {
         do {
             userId = try await client.auth.session.user.id
         } catch {
+            print("[ReadingMetricsSyncService] Auth session unavailable for pull: \(error)")
             return
         }
 
@@ -91,19 +107,29 @@ class ReadingMetricsSyncService {
 
         // Fetch stats + streak in parallel
         async let statsResult: [UserReadingStatsDTO]? = {
-            try? await client
-                .from("user_reading_stats")
-                .select()
-                .eq("user_id", value: userId)
-                .execute()
-                .value
+            do {
+                return try await client
+                    .from("user_reading_stats")
+                    .select()
+                    .eq("user_id", value: userId)
+                    .execute()
+                    .value
+            } catch {
+                print("[ReadingMetricsSyncService] Fetch stats failed: \(error)")
+                return nil
+            }
         }()
 
         async let streakResult: [ReadingStreakDTO]? = {
-            try? await client
-                .rpc("get_reading_streak", params: ["p_user_id": userId])
-                .execute()
-                .value
+            do {
+                return try await client
+                    .rpc("get_reading_streak", params: ["p_user_id": userId])
+                    .execute()
+                    .value
+            } catch {
+                print("[ReadingMetricsSyncService] Fetch streak failed: \(error)")
+                return nil
+            }
         }()
 
         guard let stats = await statsResult?.first else { return }
@@ -112,7 +138,13 @@ class ReadingMetricsSyncService {
         // Upsert into local cache
         let predicate = #Predicate<ReadingStatsCache> { $0.userId == userIdString }
         let descriptor = FetchDescriptor<ReadingStatsCache>(predicate: predicate)
-        let existing = try? modelContext.fetch(descriptor)
+        let existing: [ReadingStatsCache]?
+        do {
+            existing = try modelContext.fetch(descriptor)
+        } catch {
+            print("[ReadingMetricsSyncService] Fetch stats cache failed: \(error)")
+            return
+        }
 
         let cache: ReadingStatsCache
         if let found = existing?.first {
@@ -130,6 +162,10 @@ class ReadingMetricsSyncService {
         cache.longestStreak = streak?.longestStreak ?? 0
         cache.lastSyncedAt = Date()
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            print("[ReadingMetricsSyncService] Save stats cache failed: \(error)")
+        }
     }
 }

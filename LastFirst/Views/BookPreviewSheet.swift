@@ -128,7 +128,7 @@ struct BookPreviewSheet: View {
     // MARK: - Preview Card
 
     private func previewCard(item: LibraryItem) -> some View {
-        let itemTextColor = textColors[item.documentId] ?? Color(hex: "F4F3EE")
+        let itemTextColor = textColors[item.documentId] ?? Color.warmBackground
 
         return VStack(spacing: 20) {
             Spacer()
@@ -186,7 +186,7 @@ struct BookPreviewSheet: View {
                 if let wc = item.wordCount {
                     Text("\u{00B7}")
                         .foregroundStyle(textColor.opacity(0.4))
-                    Text(formatWordCount(wc))
+                    Text(wc.formattedWordCount)
                         .font(.rethinkSans(13))
                         .foregroundStyle(textColor.opacity(0.6))
                 }
@@ -290,10 +290,10 @@ struct BookPreviewSheet: View {
 
     @ViewBuilder
     private func sourceButton(item: LibraryItem, textColor: Color) -> some View {
-        if case .web(let web) = item.source {
-            Link(destination: web.url) {
+        if let url = sourceURL(for: item) {
+            Link(destination: url) {
                 HStack(spacing: 4) {
-                    Text("Source")
+                    Text(url.host ?? "Source")
                         .font(.rethinkSans(16, weight: .medium))
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12, weight: .semibold))
@@ -309,10 +309,10 @@ struct BookPreviewSheet: View {
 
     @ViewBuilder
     private func sourceButtonRow(item: LibraryItem, textColor: Color) -> some View {
-        if case .web(let web) = item.source {
-            Link(destination: web.url) {
+        if let url = sourceURL(for: item) {
+            Link(destination: url) {
                 HStack(spacing: 4) {
-                    Text("Source")
+                    Text(url.host ?? "Source")
                         .font(.rethinkSans(16, weight: .medium))
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 12, weight: .semibold))
@@ -323,6 +323,17 @@ struct BookPreviewSheet: View {
                 .background(textColor.opacity(0.15))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
+        }
+    }
+
+    private func sourceURL(for item: LibraryItem) -> URL? {
+        switch item.source {
+        case .web(let web):
+            return web.url
+        case .curated(let curated):
+            return curated.sourceUrl
+        default:
+            return nil
         }
     }
 
@@ -343,7 +354,7 @@ struct BookPreviewSheet: View {
                 backgroundColors[item.documentId] = Color(darkened)
                 textColors[item.documentId] = darkened.brightnessComponent > 0.55
                     ? Color(hex: "1A1A1A")
-                    : Color(hex: "F4F3EE")
+                    : Color.warmBackground
             }
         }
     }
@@ -357,16 +368,11 @@ struct BookPreviewSheet: View {
             }
         case .web:
             return "Article"
+        case .curated(let c):
+            return (c.fileType ?? "article").uppercased()
         }
     }
 
-    private func formatWordCount(_ count: Int) -> String {
-        if count >= 1000 {
-            let k = Double(count) / 1000.0
-            return String(format: "%.1fk words", k)
-        }
-        return "\(count) words"
-    }
 }
 
 // MARK: - Clear Sheet Background

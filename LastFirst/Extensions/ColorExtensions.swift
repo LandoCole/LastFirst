@@ -127,6 +127,17 @@ extension Color {
         self.init(hex: value, opacity: opacity)
     }
 
+    // Shared app color constants
+    static let warmBackground = Color(hex: "F4F3EE")
+    static let warmForeground = Color(hex: "463F3A")
+    static let goldAccent = Color(hex: "956C24")
+    static let darkGold = Color(hex: "B8860B")
+
+    static let fallbackCoverPalette: [String] = [
+        "a58a43","999661","a8895a","b77c53","ab6c59",
+        "81756d","6a8281","538e95","799496","5e8c72"
+    ]
+
     // App theme colors
     static let appBackground = Color("AppBackground")
     static let appForeground = Color("AppForeground")

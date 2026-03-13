@@ -41,7 +41,7 @@ struct CatalogPreviewSheet: View {
                 if let wc = item.wordCount {
                     Text("\u{00B7}")
                         .foregroundStyle(.secondary.opacity(0.5))
-                    Text(formatWordCount(wc))
+                    Text(wc.formattedWordCount)
                         .font(.rethinkSans(13))
                         .foregroundStyle(.secondary)
                 }
@@ -57,30 +57,7 @@ struct CatalogPreviewSheet: View {
             }
 
             Spacer()
-
-            // Add to Library button
-            Button {
-                // TODO: Download and add to library
-                dismiss()
-            } label: {
-                Text("Add to Library")
-                    .font(.rethinkSans(16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.accentColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
         }
     }
 
-    private func formatWordCount(_ count: Int) -> String {
-        if count >= 1000 {
-            let k = Double(count) / 1000.0
-            return String(format: "%.1fk words", k)
-        }
-        return "\(count) words"
-    }
 }

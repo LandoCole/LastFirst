@@ -12,20 +12,40 @@ struct LibraryView: View {
     @State private var articleURL: String = ""
     @State private var isImporting: Bool = false
     @State private var importError: String? = nil
-    @State private var sortOption: SortOption = .dateAdded
     @State private var currentContinuePage: Int? = 0
     @State private var previewContext: BookPreviewContext? = nil
+    @State private var showCurationSheet: Bool = false
+    @State private var editingList: ReadingList? = nil
+    @State private var showAddSheet: Bool = false
+    @State private var selectedStatus: LibraryItem.InferredReadingStatus? = nil
+    @State private var showFilterSearch: Bool = false
+    @State private var filterKeyword: String = ""
+    @State private var filterField: FilterField = .title
     @Namespace private var libraryGlassNamespace
 
     private let ingestionService = DocumentIngestionService()
 
-    // MARK: - Sort
+    // MARK: - Filter
 
-    enum SortOption: String, CaseIterable {
-        case dateAdded = "Date Added"
+    enum FilterField: String, CaseIterable {
         case title = "Title"
         case author = "Author"
-        case lastOpened = "Last Opened"
+        case genre = "Genre"
+    }
+
+    private func matchesFilter(_ item: LibraryItem) -> Bool {
+        // Status filter
+        if let selectedStatus, item.inferredStatus != selectedStatus {
+            return false
+        }
+        // Keyword filter
+        guard !filterKeyword.isEmpty else { return true }
+        let query = filterKeyword.lowercased()
+        switch filterField {
+        case .title: return item.title.lowercased().contains(query)
+        case .author: return (item.author ?? "").lowercased().contains(query)
+        case .genre: return true
+        }
     }
 
     // MARK: - Filtered Data
@@ -36,46 +56,23 @@ struct LibraryView: View {
             .sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
     }
 
-    private var allItems: [LibraryItem] {
-        sortedItems(appState.library)
-    }
-
-    private var inProgressItems: [LibraryItem] {
+    private var filteredAllItems: [LibraryItem] {
         appState.library
-            .filter { $0.inferredStatus == .reading }
-            .sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
-    }
-
-    private var completedItems: [LibraryItem] {
-        appState.library
-            .filter { $0.inferredStatus == .completed }
+            .filter { matchesFilter($0) }
             .sorted { $0.dateAdded > $1.dateAdded }
     }
 
-    private var wantToReadItems: [LibraryItem] {
+    private func filteredItemsForList(_ list: ReadingList) -> [LibraryItem] {
         appState.library
-            .filter { $0.inferredStatus == .wantToRead }
+            .filter { list.itemIds.contains($0.id) && matchesFilter($0) }
             .sorted { $0.dateAdded > $1.dateAdded }
-    }
-
-    private func sortedItems(_ items: [LibraryItem]) -> [LibraryItem] {
-        switch sortOption {
-        case .dateAdded:
-            return items.sorted { $0.dateAdded > $1.dateAdded }
-        case .title:
-            return items.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        case .author:
-            return items.sorted { ($0.author ?? "") < ($1.author ?? "") }
-        case .lastOpened:
-            return items.sorted { ($0.lastOpenedAt ?? .distantPast) > ($1.lastOpenedAt ?? .distantPast) }
-        }
     }
 
     // MARK: - Body
 
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground)
+            Color.warmBackground
                 .ignoresSafeArea()
 
             if appState.library.isEmpty {
@@ -90,6 +87,25 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $showAccount) {
             AccountView()
+        }
+        .sheet(isPresented: $showAddSheet) {
+            AddContentSheet { action in
+                // Delay slightly so the sheet dismissal completes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    switch action {
+                    case .importFile:
+                        showFilePicker = true
+                    case .addURL:
+                        showURLInput = true
+                    case .newCollection:
+                        showCurationSheet = true
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showCurationSheet, onDismiss: { editingList = nil }) {
+            CreateCurationSheet(editingList: editingList)
+                .environmentObject(appState)
         }
         .sheet(item: $previewContext) { context in
             BookPreviewSheet(
@@ -149,46 +165,19 @@ struct LibraryView: View {
 
     private var headerBar: some View {
         HStack {
+            Button { showAccount = true } label: {
+                accountAvatar
+            }
+            .buttonStyle(.plain)
+
             Text("Library")
                 .font(.hedvigLettersSerif(24))
             Spacer()
 
-            Menu {
-                Button("Import Book or PDF") { showFilePicker = true }
-                Button("Add Article from URL") { showURLInput = true }
-            } label: {
+            Button { showAddSheet = true } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
-            }
-            .tint(.primary)
-            .glassStyle(shape: .circle)
-            .conditionalGlassEffectID("importMenu", in: libraryGlassNamespace)
-
-            Menu {
-                ForEach(SortOption.allCases, id: \.self) { option in
-                    Button {
-                        sortOption = option
-                    } label: {
-                        HStack {
-                            Text(option.rawValue)
-                            if sortOption == option { Image(systemName: "checkmark") }
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
-            }
-            .tint(.primary)
-            .glassStyle(shape: .circle)
-            .conditionalGlassEffectID("sortMenu", in: libraryGlassNamespace)
-
-            Button { showAccount = true } label: {
-                accountPill
             }
             .buttonStyle(.plain)
         }
@@ -207,27 +196,20 @@ struct LibraryView: View {
         authViewModel.userProfile?.displayName ?? "Guest"
     }
 
-    private var accountPill: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(Color(hex: "B8860B"))
-                .frame(width: 34, height: 34)
-                .overlay {
-                    Text(userInitials)
-                        .font(.hedvigLettersSerif(11))
-                        .foregroundStyle(.white)
-                }
-
-            Text(userName)
-                .font(.rethinkSans(11, weight: .semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-        }
-        .padding(.leading, 5)
-        .padding(.trailing, 12)
-        .frame(height: 44)
-        .glassStyle(shape: .pill)
-        .conditionalGlassEffectID("accountPill", in: libraryGlassNamespace)
+    private var accountAvatar: some View {
+        Circle()
+            .fill(Color.darkGold)
+            .frame(width: 36, height: 36)
+            .overlay {
+                Text(userInitials)
+                    .font(.hedvigLettersSerif(13))
+                    .foregroundStyle(.white)
+            }
+            .overlay {
+                Circle().stroke(Color.goldAccent, lineWidth: 1.5)
+            }
+            .nativeGlassButton(shape: .circle)
+            .conditionalGlassEffectID("accountAvatar", in: libraryGlassNamespace)
     }
 
     // MARK: - Empty State
@@ -282,33 +264,158 @@ struct LibraryView: View {
 
     // MARK: - Library Content
 
+    @State private var stickyHeaderHeight: CGFloat = 0
+
+    private var stickyHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            headerBar
+
+            filterPillsRow
+
+            if showFilterSearch {
+                filterSearchBar
+            }
+        }
+        .padding(.bottom, 12)
+        .background(
+            GeometryReader { geo in
+                Color.warmBackground
+                    .ignoresSafeArea(edges: .top)
+                    .preference(key: StickyHeaderHeightKey.self, value: geo.size.height)
+            }
+        )
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(hex: "BCB8B1"))
+                .frame(height: 0.5)
+        }
+        .shadow(color: .black.opacity(0.1), radius: 4, y: 4)
+    }
+
     private var libraryContent: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 28) {
-                headerBar
-
                 // Continue pager
                 if !continueItems.isEmpty {
                     continuePagerSection
                 }
 
-                // Shelf sections
-                coverShelfSection(title: "All", items: allItems)
-
-                if !inProgressItems.isEmpty {
-                    coverShelfSection(title: "In Progress", items: inProgressItems)
+                // Curation-based sections
+                let allFiltered = filteredAllItems
+                if !allFiltered.isEmpty {
+                    coverShelfSection(title: "All", items: allFiltered)
                 }
 
-                if !completedItems.isEmpty {
-                    coverShelfSection(title: "Completed", items: completedItems)
-                }
-
-                if !wantToReadItems.isEmpty {
-                    coverShelfSection(title: "Want to Read", items: wantToReadItems)
+                ForEach(appState.readingLists) { list in
+                    let listFiltered = filteredItemsForList(list)
+                    if !listFiltered.isEmpty {
+                        coverShelfSection(title: list.name, items: listFiltered, list: list)
+                    }
                 }
             }
             .padding(.vertical, 8)
+            .padding(.top, 12)
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            stickyHeader
+        }
+        .onPreferenceChange(StickyHeaderHeightKey.self) { height in
+            stickyHeaderHeight = height
+        }
+    }
+
+    // MARK: - Filter Pills
+
+    private let pillColor = Color.goldAccent
+
+    private var filterPillsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // Filter icon button
+                Button {
+                    withAnimation {
+                        showFilterSearch.toggle()
+                        if !showFilterSearch {
+                            filterKeyword = ""
+                        }
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(showFilterSearch ? .white : Color(hex: "1e1e1e"))
+                        .frame(width: 30, height: 30)
+                        .background(showFilterSearch ? pillColor.opacity(0.6) : pillColor.opacity(0.25))
+                        .clipShape(Capsule())
+                }
+
+                // "All" pill
+                statusPill(label: "All", status: nil)
+
+                // Status pills
+                statusPill(label: "In Progress", status: .reading)
+                statusPill(label: "Completed", status: .completed)
+                statusPill(label: "Never Read", status: .wantToRead)
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func statusPill(label: String, status: LibraryItem.InferredReadingStatus?) -> some View {
+        let isSelected = selectedStatus == status
+        return Button {
+            if isSelected {
+                selectedStatus = nil
+            } else {
+                selectedStatus = status
+            }
+        } label: {
+            HStack(spacing: 4) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                Text(label)
+            }
+            .font(.rethinkSans(13))
+            .foregroundStyle(Color(hex: "1e1e1e"))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(pillColor.opacity(isSelected ? 0.40 : 0.25))
+            .clipShape(Capsule())
+        }
+    }
+
+    // MARK: - Filter Search Bar
+
+    private var filterSearchBar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search...", text: $filterKeyword)
+                    .font(.rethinkSans(14))
+                    .textFieldStyle(.plain)
+                if !filterKeyword.isEmpty {
+                    Button { filterKeyword = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            Picker("Field", selection: $filterField) {
+                ForEach(FilterField.allCases, id: \.self) { field in
+                    Text(field.rawValue).tag(field)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.horizontal, 20)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     // MARK: - Continue Pager
@@ -351,7 +458,7 @@ struct LibraryView: View {
 
     // MARK: - Cover Shelf Section
 
-    private func coverShelfSection(title: String, items: [LibraryItem]) -> some View {
+    private func coverShelfSection(title: String, items: [LibraryItem], list: ReadingList? = nil) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 4) {
                 Text(title)
@@ -361,6 +468,23 @@ struct LibraryView: View {
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 20)
+            .if(list != nil) { view in
+                view.contextMenu {
+                    Button {
+                        editingList = list
+                        showCurationSheet = true
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        if let list = list {
+                            appState.deleteReadingList(list.id)
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
@@ -372,6 +496,19 @@ struct LibraryView: View {
                                 }
                             }
                             .contextMenu {
+                                ForEach(appState.readingLists) { list in
+                                    Button {
+                                        appState.addItemToList(item.id, listId: list.id)
+                                    } label: {
+                                        Label(list.name, systemImage: list.itemIds.contains(item.id) ? "checkmark" : "list.bullet")
+                                    }
+                                }
+                                Button {
+                                    showCurationSheet = true
+                                } label: {
+                                    Label("New List...", systemImage: "plus")
+                                }
+                                Divider()
                                 Button(role: .destructive) {
                                     appState.deleteItem(item)
                                 } label: {
@@ -390,6 +527,7 @@ struct LibraryView: View {
     private func libraryCoverCard(item: LibraryItem) -> some View {
         BookCoverView(
             coverImageData: appState.getCoverImage(for: item.documentId),
+            coverURL: item.curatedCoverURL,
             title: item.title,
             iconName: item.coverIconName,
             ribbonState: item.ribbonState
@@ -509,6 +647,28 @@ struct LibraryView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Conditional Modifier
+
+private extension View {
+    @ViewBuilder
+    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
+        }
+    }
+}
+
+// MARK: - Sticky Header Height Preference Key
+
+private struct StickyHeaderHeightKey: PreferenceKey {
+    nonisolated(unsafe) static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

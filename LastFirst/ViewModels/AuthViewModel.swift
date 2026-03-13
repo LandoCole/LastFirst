@@ -72,7 +72,6 @@ class AuthViewModel: ObservableObject {
         case .signedIn:
             currentUser = session?.user
             isAuthenticated = true
-            Task { await fetchProfile() }
         case .signedOut:
             currentUser = nil
             userProfile = nil

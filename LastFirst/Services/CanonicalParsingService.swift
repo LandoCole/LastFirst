@@ -7,10 +7,24 @@ import Readability
 actor CanonicalParsingService {
     static let shared = CanonicalParsingService()
 
-    enum ParsingError: Error {
+    enum ParsingError: Error, LocalizedError {
         case unsupportedSource
         case invalidEPUB
         case emptyContent
+        case fileNotFound
+        case corruptPDF
+        case passwordProtectedPDF
+
+        var errorDescription: String? {
+            switch self {
+            case .unsupportedSource: return "This file type is not supported."
+            case .invalidEPUB: return "This EPUB file could not be opened."
+            case .emptyContent: return "This document appears to be empty."
+            case .fileNotFound: return "The file could not be found."
+            case .corruptPDF: return "This PDF file appears to be damaged and cannot be read."
+            case .passwordProtectedPDF: return "This PDF is password-protected. Please unlock it before importing."
+            }
+        }
     }
 
     private enum Versions {
@@ -155,15 +169,34 @@ actor CanonicalParsingService {
     }
 
     private func parsePDF(documentId: UUID, url: URL) async throws -> CanonicalDocumentPackages {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ParsingError.fileNotFound
+        }
+
         guard let document = PDFDocument(url: url) else {
-            throw ParsingError.emptyContent
+            throw ParsingError.corruptPDF
+        }
+
+        if document.isEncrypted && document.isLocked {
+            throw ParsingError.passwordProtectedPDF
         }
 
         // Extract and save first page as cover
         extractAndSavePDFCover(document: document, documentId: documentId)
 
         let extractor = PDFOCRTextExtractor()
-        let pageTexts = try await extractor.extractTextByPage(from: url)
+        let pageTexts: [String]
+        do {
+            pageTexts = try await extractor.extractTextByPage(from: url)
+        } catch {
+            // Fallback: try native-text-only extraction if OCR fails
+            print("[CanonicalParsingService] OCR extraction failed, attempting native text only: \(error)")
+            var fallbackTexts: [String] = []
+            for i in 0..<document.pageCount {
+                fallbackTexts.append(document.page(at: i)?.string ?? "")
+            }
+            pageTexts = fallbackTexts
+        }
         let title = url.deletingPathExtension().lastPathComponent
 
         let renderPath = "document.pdf"
@@ -212,21 +245,22 @@ actor CanonicalParsingService {
     }
 
     private func parseWeb(documentId: UUID, url: URL) async throws -> CanonicalDocumentPackages {
-        let result = try await parseReadability(url: url)
+        // Try Firecrawl first (handles JS-rendered sites), fall back to Readability
+        let (title, htmlContent, textContent, byline, siteName, language) = try await extractWebContent(url: url)
 
         // Extract and save cover image (first image) and article images
-        await extractAndSaveWebImages(htmlContent: result.content, baseURL: url, documentId: documentId)
+        await extractAndSaveWebImages(htmlContent: htmlContent, baseURL: url, documentId: documentId)
 
-        let html = wrapHTMLDocument(title: result.title, bodyHTML: result.content)
+        let html = wrapHTMLDocument(title: title, bodyHTML: htmlContent)
         let htmlData = Data(html.utf8)
         let entryPath = "index.html"
 
         _ = try await resourceCache.store(data: htmlData, documentId: documentId, relativePath: entryPath)
 
-        let unit = ReadingUnit(id: "article", title: result.title, kind: .article, order: 0)
+        let unit = ReadingUnit(id: "article", title: title, kind: .article, order: 0)
         let textAnchors = buildTextAnchorsPackage(
             units: [unit],
-            unitTexts: [result.textContent],
+            unitTexts: [textContent],
             segmentKind: .paragraphGroup,
             parserVersion: Versions.parser,
             normalizerVersion: Versions.normalizer,
@@ -235,9 +269,9 @@ actor CanonicalParsingService {
 
         let manifest = DocumentManifest(
             id: documentId,
-            title: result.title.isEmpty ? (result.siteName ?? "Untitled") : result.title,
-            authors: [result.byline].compactMap { $0 },
-            languageCode: result.language,
+            title: title.isEmpty ? (siteName ?? "Untitled") : title,
+            authors: [byline].compactMap { $0 },
+            languageCode: language,
             identifiers: [DocumentIdentifier(scheme: "url", value: url.absoluteString)],
             documentType: .web,
             parserVersion: Versions.parser,
@@ -248,7 +282,7 @@ actor CanonicalParsingService {
         let renderPackage = RenderPackage(
             format: .html,
             baseURL: offlineBaseURL(for: documentId),
-            units: [RenderUnit(unitID: "article", entryPath: entryPath, title: result.title)]
+            units: [RenderUnit(unitID: "article", entryPath: entryPath, title: title)]
         )
 
         return CanonicalDocumentPackages(
@@ -256,6 +290,44 @@ actor CanonicalParsingService {
             renderPackage: renderPackage,
             textAnchorsPackage: textAnchors
         )
+    }
+
+    /// Extracts web content via Firecrawl Edge Function, falling back to Readability for offline use.
+    private func extractWebContent(url: URL) async throws -> (title: String, content: String, textContent: String, byline: String?, siteName: String?, language: String?) {
+        // Try Firecrawl (server-side, handles JS-rendered pages)
+        do {
+            let result = try await SupabaseManager.shared.scrapeURL(url: url)
+            let htmlContent = result.content.isEmpty ? markdownToBasicHTML(result.markdown) : result.content
+            let text = result.textContent.isEmpty ? result.markdown : result.textContent
+            return (result.title, htmlContent, text, result.byline, result.siteName, result.language)
+        } catch {
+            print("[CanonicalParsingService] Firecrawl failed, falling back to Readability: \(error)")
+        }
+
+        // Fallback: Readability (client-side, static HTML only)
+        let result = try await parseReadability(url: url)
+        return (result.title, result.content, result.textContent, result.byline, result.siteName, result.language)
+    }
+
+    /// Converts markdown to basic HTML for rendering.
+    private func markdownToBasicHTML(_ markdown: String) -> String {
+        var html = markdown
+        // Headings
+        html = html.replacingOccurrences(of: #"(?m)^### (.+)$"#, with: "<h3>$1</h3>", options: .regularExpression)
+        html = html.replacingOccurrences(of: #"(?m)^## (.+)$"#, with: "<h2>$1</h2>", options: .regularExpression)
+        html = html.replacingOccurrences(of: #"(?m)^# (.+)$"#, with: "<h1>$1</h1>", options: .regularExpression)
+        // Bold and italic
+        html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
+        html = html.replacingOccurrences(of: #"\*(.+?)\*"#, with: "<em>$1</em>", options: .regularExpression)
+        // Paragraphs (double newline)
+        let paragraphs = html.components(separatedBy: "\n\n")
+        html = paragraphs.map { para in
+            let trimmed = para.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return "" }
+            if trimmed.hasPrefix("<h") { return trimmed }
+            return "<p>\(trimmed)</p>"
+        }.joined(separator: "\n")
+        return html
     }
 
     @MainActor
@@ -526,7 +598,11 @@ actor CanonicalParsingService {
             return
         }
 
-        try? imageStorage.saveCoverImage(coverData, for: documentId)
+        do {
+            try imageStorage.saveCoverImage(coverData, for: documentId)
+        } catch {
+            print("[CanonicalParsingService] Failed to save EPUB cover for \(documentId): \(error)")
+        }
     }
 
     private nonisolated func extractAndSaveEPUBImages(epub: EPUBDocument, documentId: UUID) {
@@ -542,7 +618,11 @@ actor CanonicalParsingService {
             }
 
             let imageId = UUID()
-            try? imageStorage.saveImage(compressedData, imageId: imageId, bookId: documentId)
+            do {
+                try imageStorage.saveImage(compressedData, imageId: imageId, bookId: documentId)
+            } catch {
+                print("[CanonicalParsingService] Failed to save EPUB image \(index) for \(documentId): \(error)")
+            }
 
             // Note: The caller will need to add metadata to AppState
             // We store images but metadata tracking happens at a higher level
@@ -564,7 +644,11 @@ actor CanonicalParsingService {
             return
         }
 
-        try? imageStorage.saveCoverImage(coverData, for: documentId)
+        do {
+            try imageStorage.saveCoverImage(coverData, for: documentId)
+        } catch {
+            print("[CanonicalParsingService] Failed to save PDF cover for \(documentId): \(error)")
+        }
     }
 
     private func extractAndSaveWebImages(htmlContent: String, baseURL: URL, documentId: UUID) async {
@@ -581,7 +665,11 @@ actor CanonicalParsingService {
             // Save first image as cover
             if isFirstImage {
                 if let coverData = compressToJPEG(image, maxDimension: ImageConstants.coverMaxDimension) {
-                    try? imageStorage.saveCoverImage(coverData, for: documentId)
+                    do {
+                        try imageStorage.saveCoverImage(coverData, for: documentId)
+                    } catch {
+                        print("[CanonicalParsingService] Failed to save web cover for \(documentId): \(error)")
+                    }
                 }
                 isFirstImage = false
             }
@@ -589,7 +677,11 @@ actor CanonicalParsingService {
             // Save as document image for artifacts
             if let compressedData = compressToJPEG(image, maxDimension: ImageConstants.articleImageMaxDimension) {
                 let imageId = UUID()
-                try? imageStorage.saveImage(compressedData, imageId: imageId, bookId: documentId)
+                do {
+                    try imageStorage.saveImage(compressedData, imageId: imageId, bookId: documentId)
+                } catch {
+                    print("[CanonicalParsingService] Failed to save web image \(index) for \(documentId): \(error)")
+                }
                 saveImageMetadata(imageId: imageId, documentId: documentId, pageIndex: 0, wordIndex: index)
             }
         }

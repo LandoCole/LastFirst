@@ -39,9 +39,11 @@ struct LastFirstApp: App {
             .environmentObject(appState)
             .environmentObject(readerCoordinator)
             .environmentObject(authViewModel)
-            .preferredColorScheme(appState.settings.appAppearanceMode.preferredColorScheme)
+            .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
             .task {
                 authViewModel.start()
+                // Defer metrics setup to avoid competing with initial UI rendering
+                try? await Task.sleep(for: .seconds(2))
                 setupMetricsSync()
             }
             .onOpenURL { url in

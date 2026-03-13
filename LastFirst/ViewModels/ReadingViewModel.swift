@@ -694,14 +694,10 @@ class ReadingViewModel: ObservableObject {
 
         // Track current block for structural awareness
         var currentBlockIndex = 0
-        var currentBlockKind: BlockKind = .paragraph
 
         for token in tokens {
             // Update block context
             if token.blockIndex != currentBlockIndex && token.blockIndex < (tokens.last?.blockIndex ?? 0) + 1 {
-                if token.blockIndex < blocks.count {
-                    currentBlockKind = blocks[token.blockIndex].kind
-                }
                 currentBlockIndex = token.blockIndex
             }
 

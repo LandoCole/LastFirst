@@ -68,19 +68,10 @@ struct TOCSheetView: View {
                     dismiss()
                 } label: {
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(chapter.title)
-                                .font(.body)
-                                .foregroundColor(.primary)
-                                .fontWeight(chapter.title == currentChapterTitle ? .semibold : .regular)
-
-                            // Show page number if available
-                            if let pageLabel = pageLabel(for: chapter) {
-                                Text("p. \(pageLabel)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
+                        Text(chapter.title)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .fontWeight(chapter.title == currentChapterTitle ? .semibold : .regular)
 
                         Spacer()
 
@@ -98,10 +89,4 @@ struct TOCSheetView: View {
         .listStyle(.plain)
     }
 
-    private func pageLabel(for chapter: Chapter) -> String? {
-        guard !pageList.isEmpty else { return nil }
-        // Find the nearest page-list entry by matching unit/progress
-        // This is approximate — exact matching requires anchor resolution
-        return nil
-    }
 }

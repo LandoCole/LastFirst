@@ -3,8 +3,10 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var readerCoordinator: ReaderCoordinator
+    @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedTab: NavigationTab = .home
     @State private var showCuratorSheet = false
+    @State private var homeScrollToTodayTrigger = false
     @State private var curatorInputText = ""
     @Namespace private var bottomBarNamespace
 
@@ -12,7 +14,10 @@ struct ContentView: View {
         ZStack {
             // Page content — opacity-switched NavigationStacks
             NavigationStack {
-                HomeView(onNavigateToCurator: { showCuratorSheet = true })
+                HomeView(
+                    scrollToTodayTrigger: homeScrollToTodayTrigger,
+                    onNavigateToCurator: { showCuratorSheet = true }
+                )
             }
             .opacity(selectedTab == .home ? 1 : 0)
             .allowsHitTesting(selectedTab == .home)
@@ -54,9 +59,12 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showCuratorSheet) {
-            CuratorView(inputText: $curatorInputText)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            CuratorView(
+                inputText: $curatorInputText,
+                userId: authVM.currentUser?.id ?? UUID()
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -67,7 +75,11 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 // Home button
                 Button {
-                    selectedTab = .home
+                    if selectedTab == .home {
+                        homeScrollToTodayTrigger.toggle()
+                    } else {
+                        selectedTab = .home
+                    }
                 } label: {
                     Image(systemName: "house.fill")
                         .font(.system(size: 16, weight: .medium))

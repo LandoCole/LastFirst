@@ -27,6 +27,8 @@ class ReadingStatsViewModel: ObservableObject {
     @Published var dailyReadingData: [DailyReadingPoint] = []
     @Published var todayReadingSeconds: Int = 0
     @Published var todayWPM: Int = 0
+    @Published var todayWordsRead: Int = 0
+    @Published var todaySessions: [ReadingSessionRecord] = []
     @Published var chartRange: ChartRange = .week {
         didSet { dailyReadingData = computeDailyData(range: chartRange) }
     }
@@ -50,7 +52,7 @@ class ReadingStatsViewModel: ObservableObject {
         statsCache = try? modelContext.fetch(cacheDescriptor).first
 
         // Fetch all sessions sorted by date
-        var sessionDescriptor = FetchDescriptor<ReadingSessionRecord>(
+        let sessionDescriptor = FetchDescriptor<ReadingSessionRecord>(
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
         allSessions = (try? modelContext.fetch(sessionDescriptor)) ?? []
@@ -59,10 +61,12 @@ class ReadingStatsViewModel: ObservableObject {
         // Compute today stats
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
-        let todaySessions = allSessions.filter { $0.startedAt >= todayStart }
-        todayReadingSeconds = todaySessions.reduce(0) { $0 + $1.durationSeconds }
+        let todayFiltered = allSessions.filter { $0.startedAt >= todayStart }
+        todaySessions = todayFiltered
+        todayReadingSeconds = todayFiltered.reduce(0) { $0 + $1.durationSeconds }
 
-        let totalWords = todaySessions.reduce(0) { $0 + $1.wordsRead }
+        let totalWords = todayFiltered.reduce(0) { $0 + $1.wordsRead }
+        todayWordsRead = totalWords
         let totalMinutes = Double(todayReadingSeconds) / 60.0
         todayWPM = totalMinutes > 0 ? Int(Double(totalWords) / totalMinutes) : 0
 

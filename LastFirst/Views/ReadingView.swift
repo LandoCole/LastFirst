@@ -338,7 +338,7 @@ struct ReadingView: View {
     // MARK: - Loading Overlay
     private var loadingOverlay: some View {
         ZStack {
-            Color(UIColor.systemBackground)
+            Color.warmBackground
                 .ignoresSafeArea()
 
             VStack(spacing: 16) {
@@ -410,6 +410,12 @@ struct ReadingView: View {
                 Label("Themes", systemImage: "paintbrush")
             }
 
+            if let sourceUrl = itemSourceURL {
+                Link(destination: sourceUrl) {
+                    Label(sourceUrl.host ?? "View Source", systemImage: "safari")
+                }
+            }
+
             Divider()
 
             Button(action: {
@@ -444,6 +450,17 @@ struct ReadingView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var itemSourceURL: URL? {
+        switch item.source {
+        case .web(let web):
+            return web.url.absoluteString == "about:blank" ? nil : web.url
+        case .curated(let curated):
+            return curated.sourceUrl
+        default:
+            return nil
+        }
     }
 
     // MARK: - Hold-to-Stream
@@ -773,7 +790,7 @@ struct ReadingView: View {
             .padding(24)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(UIColor.systemBackground))
+                    .fill(Color.warmBackground)
             )
             .padding(32)
         }
