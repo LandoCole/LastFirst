@@ -80,6 +80,11 @@ enum CuratorStatusType: String, Codable {
     case stepComplete = "step_complete"
     case finding
     case error
+    // Multi-agent status types
+    case agentSpawned = "agent_spawned"
+    case agentProgress = "agent_progress"
+    case agentComplete = "agent_complete"
+    case synthesisStart = "synthesis_start"
 }
 
 struct CuratorStatusMessage: Codable {
@@ -91,6 +96,11 @@ struct CuratorStatusMessage: Codable {
     let detail: String?
     let finding: String?
     let title: String?
+    // Multi-agent fields
+    let agentRole: String?
+    let agentTaskId: String?
+    let totalAgents: Int?
+    let completedAgents: Int?
 
     struct CuratorPlanStepDTO: Codable {
         let label: String
@@ -110,9 +120,17 @@ struct CuratorPlanStep: Identifiable, Equatable {
     var finding: String?
 }
 
+struct AgentProgress: Identifiable, Equatable {
+    let id: UUID
+    let role: String
+    var state: CuratorStepState = .pending
+    var finding: String?
+}
+
 struct CuratorResearchPlan: Equatable {
     var steps: [CuratorPlanStep] = []
     var currentStepIndex: Int? = nil
+    var agents: [AgentProgress] = []
 }
 
 // MARK: - Curation Messages

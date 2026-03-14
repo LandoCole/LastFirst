@@ -1,6 +1,6 @@
 import Foundation
 
-struct ReadingList: Identifiable, Codable, Equatable {
+struct ReadingList: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
     var name: String
     var itemIds: [UUID]    // LibraryItem IDs

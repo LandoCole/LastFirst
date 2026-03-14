@@ -16,9 +16,10 @@
 		2B07F5685E88ED49FC02F11D /* Curation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F20D30C07128D0EBBF6DBD1 /* Curation.swift */; };
 		3174C987A530025625D94F04 /* SignupInterestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2DC33DC1B786A05E662830E /* SignupInterestsView.swift */; };
 		368655AC770C84B41F8F24E2 /* ReadingStatsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7FCCEBA36A1B2CB63DD6911 /* ReadingStatsSheet.swift */; };
+		3A1B2C3D4E5F6A7B8C9D0E1F /* CurationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* CurationDetailView.swift */; };
+		3A1B2C3D4E5F6A7B8C9D0E20 /* ReadingStatsPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F3 /* ReadingStatsPageView.swift */; };
 		3A6A52B4849B757233C4A137 /* ProgressScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8190327746E57504C831F2F8 /* ProgressScrubber.swift */; };
 		3DB8FB2FEBFDABA71D81AECB /* LiquidGlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9807B97320BE41A43686A4A3 /* LiquidGlassStyle.swift */; };
-		3FCBD1DF9824BE84E839F458 /* CurationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68658BB5FDCACA8521DC87B9 /* CurationDetailView.swift */; };
 		44C3ADE49E358B27D7C96FAA /* SignupPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EAC76F50B411C46DAD90FD0 /* SignupPasswordView.swift */; };
 		44CB00732A966413E3FC5B5B /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32AF24ED35D01AC1B4D93F08 /* BookCoverView.swift */; };
 		475E339186C8C25CEAFD6001 /* BookCoverRibbon.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */; };
@@ -129,7 +130,6 @@
 		52D7EB6350CBAE2C83EC1CD8 /* DotMatrixFonts.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DotMatrixFonts.swift; sourceTree = "<group>"; };
 		531EBD32CE4A61CF5799A87E /* MiniReaderBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MiniReaderBar.swift; sourceTree = "<group>"; };
 		5F20D30C07128D0EBBF6DBD1 /* Curation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Curation.swift; sourceTree = "<group>"; };
-		68658BB5FDCACA8521DC87B9 /* CurationDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationDetailView.swift; sourceTree = "<group>"; };
 		6A7C9659441734C854E59B41 /* DotMatrixStatsRenderer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DotMatrixStatsRenderer.swift; sourceTree = "<group>"; };
 		6EAC76F50B411C46DAD90FD0 /* SignupPasswordView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignupPasswordView.swift; sourceTree = "<group>"; };
 		73884169B267EDEB6168C29D /* CuratorViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CuratorViewModel.swift; sourceTree = "<group>"; };
@@ -210,6 +210,8 @@
 		E2000004 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		E2000005 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		E2000006 /* Supabase.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Supabase.xcconfig; path = Config/Supabase.xcconfig; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* CurationDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationDetailView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F3 /* ReadingStatsPageView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingStatsPageView.swift; sourceTree = "<group>"; };
 		E7FCCEBA36A1B2CB63DD6911 /* ReadingStatsSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingStatsSheet.swift; sourceTree = "<group>"; };
 		EDC318EDE1CBA909EF9971A7 /* SearchOverlayView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SearchOverlayView.swift; sourceTree = "<group>"; };
 		F1551CE79D8650FF66AD58E0 /* EPUBMetadataExtractor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EPUBMetadataExtractor.swift; sourceTree = "<group>"; };
@@ -298,6 +300,8 @@
 				A85F947CF50A07FC486E5D83 /* SplashView.swift */,
 				E1B79FE2F0FCDEA03372EDB9 /* BookPreviewSheet.swift */,
 				E7FCCEBA36A1B2CB63DD6911 /* ReadingStatsSheet.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* CurationDetailView.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F3 /* ReadingStatsPageView.swift */,
 				980C8E61353C203694132FEF /* CatalogPreviewSheet.swift */,
 				CA02F2A3B4C5D6E7F8091A02 /* CuratorHistoryView.swift */,
 				CA03F2A3B4C5D6E7F8091A03 /* CurationItemDetailSheet.swift */,
@@ -305,7 +309,6 @@
 				A1B2C3D4E5F60718293A4B5C /* CreateCurationSheet.swift */,
 				CC02ADD000000002 /* AddContentSheet.swift */,
 				FF09000000000009 /* CurationPreviewSheet.swift */,
-				68658BB5FDCACA8521DC87B9 /* CurationDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -600,6 +603,8 @@
 				AB136B8858CA3132FE83649C /* ReadingStatsViewModel.swift in Sources */,
 				ACD53CC0BE04D469303667F9 /* ReadingStatsSection.swift in Sources */,
 				368655AC770C84B41F8F24E2 /* ReadingStatsSheet.swift in Sources */,
+				3A1B2C3D4E5F6A7B8C9D0E1F /* CurationDetailView.swift in Sources */,
+				3A1B2C3D4E5F6A7B8C9D0E20 /* ReadingStatsPageView.swift in Sources */,
 				AA7E8F66547A3D1C5B0C16D6 /* CatalogViewModel.swift in Sources */,
 				0D1099546DDB3184BB29CB67 /* DailyCurationViewModel.swift in Sources */,
 				DAADB28FE64D17F2125EB4E3 /* CuratorViewModel.swift in Sources */,
@@ -622,7 +627,6 @@
 				BB06000000000006 /* CurationFilterBar.swift in Sources */,
 				EE09000000000009 /* CurationPreviewSheet.swift in Sources */,
 				CC08000000000008 /* CurationCardColorCache.swift in Sources */,
-				3FCBD1DF9824BE84E839F458 /* CurationDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

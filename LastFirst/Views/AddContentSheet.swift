@@ -46,7 +46,7 @@ struct AddContentSheet: View {
 
                 addRow(
                     icon: "plus.rectangle.on.folder",
-                    title: "New Collection",
+                    title: "New Curation",
                     subtitle: "Create a curation playlist"
                 ) {
                     dismiss()
@@ -57,7 +57,7 @@ struct AddContentSheet: View {
 
             Spacer()
         }
-        .background(Color(hex: "f4f3ee").ignoresSafeArea())
+        .presentationBackground(.ultraThinMaterial)
         .presentationDetents([.medium])
         .presentationDragIndicator(.hidden)
     }

@@ -141,7 +141,7 @@ struct BookPreviewSheet: View {
                 size: CGSize(width: 220, height: 330),
                 cornerRadius: 8,
                 ribbonState: item.ribbonState,
-                scaledToFit: true
+                flexibleAspectRatio: true
             )
             .shadow(color: .black.opacity(0.4), radius: 16, y: 8)
 

@@ -85,6 +85,35 @@ final class SupabaseManager: @unchecked Sendable {
         return results.first
     }
 
+    func fetchCuration(id: UUID) async throws -> Curation? {
+        guard let client else { return nil }
+        let result: Curation = try await client
+            .from("curations")
+            .select("*")
+            .eq("id", value: id)
+            .single()
+            .execute()
+            .value
+        return result
+    }
+
+    func fetchTodaysPendingCuration(userId: UUID) async throws -> Curation? {
+        guard let client else { return nil }
+        let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
+        let results: [Curation] = try await client
+            .from("curations")
+            .select()
+            .eq("user_id", value: userId)
+            .eq("type", value: "daily")
+            .eq("status", value: "researching")
+            .gte("created_at", value: today)
+            .order("created_at", ascending: false)
+            .limit(1)
+            .execute()
+            .value
+        return results.first
+    }
+
     func fetchCurationItems(curationId: UUID) async throws -> [CurationItem] {
         guard let client else { return [] }
         let result: [CurationItem] = try await client
@@ -212,13 +241,16 @@ final class SupabaseManager: @unchecked Sendable {
 
     struct CuratorChatResponse: Codable {
         let curationId: UUID
-        let response: String
+        let response: String?
         let itemsAdded: Int?
+        let complexity: String?
+        let agentCount: Int?
 
         enum CodingKeys: String, CodingKey {
-            case response
+            case response, complexity
             case curationId = "curation_id"
             case itemsAdded = "items_added"
+            case agentCount = "agent_count"
         }
     }
 

@@ -66,10 +66,68 @@ struct CuratorPlanView: View {
                     .padding(.bottom, 12)
                 }
             }
+            // Agent progress section
+            if !plan.agents.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.3.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(gold)
+                        Text("Research Agents")
+                            .font(.rethinkSans(12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+
+                    ForEach(plan.agents) { agent in
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(spacing: 0) {
+                                stepIcon(for: agent.state)
+                                    .frame(width: 18, height: 18)
+                            }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(agentRoleDisplayName(agent.role))
+                                    .font(.rethinkSans(13, weight: .medium))
+                                    .foregroundStyle(agent.state == .pending ? .tertiary : .primary)
+
+                                if let finding = agent.finding, agent.state == .complete {
+                                    HStack(alignment: .top, spacing: 6) {
+                                        Image(systemName: "lightbulb.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(gold)
+                                            .padding(.top, 2)
+
+                                        Text(finding)
+                                            .font(.rethinkSans(11))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(gold.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .padding(.top, 4)
+                                }
+                            }
+                            .padding(.bottom, 10)
+                        }
+                    }
+                }
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .animation(.easeInOut(duration: 0.3), value: plan)
+    }
+
+    private func agentRoleDisplayName(_ role: String) -> String {
+        switch role {
+        case "preference_analyst": return "Preference Analyst"
+        case "library_searcher": return "Library Searcher"
+        case "web_researcher": return "Web Researcher"
+        default: return role.replacingOccurrences(of: "_", with: " ").capitalized
+        }
     }
 
     @ViewBuilder

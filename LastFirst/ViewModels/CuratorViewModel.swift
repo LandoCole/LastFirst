@@ -62,12 +62,6 @@ class CuratorViewModel: ObservableObject {
         // Start polling for tool status messages
         startActivityPolling()
 
-        defer {
-            stopActivityPolling()
-            isLoading = false
-            statusMessage = nil
-        }
-
         do {
             let response = try await SupabaseManager.shared.sendCuratorMessage(
                 curationId: activeCurationId,
@@ -79,29 +73,80 @@ class CuratorViewModel: ObservableObject {
             // Update curation ID (may be newly created)
             activeCurationId = response.curationId
 
-            // Add assistant response
-            let assistantMessage = CurationMessage(
-                id: UUID(),
-                curationId: response.curationId,
-                role: "assistant",
-                content: response.response,
-                createdAt: Date()
-            )
-            messages.append(assistantMessage)
+            if let directResponse = response.response {
+                // SIMPLE: response came back inline
+                let assistantMessage = CurationMessage(
+                    id: UUID(),
+                    curationId: response.curationId,
+                    role: "assistant",
+                    content: directResponse,
+                    createdAt: Date()
+                )
+                messages.append(assistantMessage)
 
-            // Refresh curation items and track which belong to this message
-            if let itemsAdded = response.itemsAdded, itemsAdded > 0 {
-                let previousIds = Set(curationItems.map(\.id))
-                await loadCurationItems()
-                let newItems = curationItems.filter { !previousIds.contains($0.id) }
-                if !newItems.isEmpty {
-                    messageItems[assistantMessage.id] = newItems
+                // Refresh curation items and track which belong to this message
+                if let itemsAdded = response.itemsAdded, itemsAdded > 0 {
+                    let previousIds = Set(curationItems.map(\.id))
+                    await loadCurationItems()
+                    let newItems = curationItems.filter { !previousIds.contains($0.id) }
+                    if !newItems.isEmpty {
+                        messageItems[assistantMessage.id] = newItems
+                    }
                 }
+
+                stopActivityPolling()
+                isLoading = false
+                statusMessage = nil
+            } else {
+                // MODERATE/COMPLEX: response will come via background processing
+                // Keep polling — pollActivities() picks up agent statuses
+                // Poll curations.status until 'ready', then fetch assistant message
+                await pollUntilReady(curationId: response.curationId)
             }
         } catch {
             self.error = error.localizedDescription
             // Remove the optimistic user message on failure
             messages.removeLast()
+            stopActivityPolling()
+            isLoading = false
+            statusMessage = nil
+        }
+    }
+
+    // MARK: - Poll Until Ready (Multi-Agent)
+
+    private func pollUntilReady(curationId: UUID) async {
+        while !Task.isCancelled {
+            // Poll tool messages for progress (existing)
+            await pollActivities()
+
+            // Check if curation is ready
+            if let curation = try? await SupabaseManager.shared.fetchCuration(id: curationId) {
+                if curation.status == "ready" {
+                    // Fetch the final assistant message + items
+                    if let msgs = try? await SupabaseManager.shared.fetchCurationMessages(curationId: curationId) {
+                        if let lastAssistant = msgs.last(where: { $0.role == "assistant" }) {
+                            messages.append(lastAssistant)
+                        }
+                    }
+                    await loadCurationItems()
+                    rebuildMessageItems()
+                    isLoading = false
+                    statusMessage = nil
+                    stopActivityPolling()
+                    return
+                }
+
+                if curation.status == "error" {
+                    error = curation.errorMessage ?? "Research failed"
+                    isLoading = false
+                    statusMessage = nil
+                    stopActivityPolling()
+                    return
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
         }
     }
 
@@ -239,6 +284,51 @@ class CuratorViewModel: ObservableObject {
 
         case .error:
             statusMessage = status.message
+
+        case .agentSpawned:
+            withAnimation(.easeOut(duration: 0.3)) {
+                if let total = status.totalAgents {
+                    statusMessage = "Launching \(total) research agents..."
+                }
+                // Initialize agents list in research plan
+                if researchPlan == nil {
+                    researchPlan = CuratorResearchPlan()
+                }
+            }
+
+        case .agentProgress:
+            if let role = status.agentRole, let taskId = status.agentTaskId {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    if researchPlan == nil {
+                        researchPlan = CuratorResearchPlan()
+                    }
+                    if let idx = researchPlan?.agents.firstIndex(where: { $0.id.uuidString == taskId }) {
+                        researchPlan?.agents[idx].state = .active
+                    } else {
+                        researchPlan?.agents.append(AgentProgress(
+                            id: UUID(uuidString: taskId) ?? UUID(),
+                            role: role,
+                            state: .active
+                        ))
+                    }
+                    statusMessage = status.message
+                }
+            }
+
+        case .agentComplete:
+            if let taskId = status.agentTaskId,
+               let idx = researchPlan?.agents.firstIndex(where: { $0.id.uuidString == taskId }) {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    researchPlan?.agents[idx].state = .complete
+                    researchPlan?.agents[idx].finding = status.finding
+                    statusMessage = status.message
+                }
+            }
+
+        case .synthesisStart:
+            withAnimation(.easeOut(duration: 0.3)) {
+                statusMessage = "Evaluating and ranking findings..."
+            }
         }
     }
 

@@ -13,7 +13,7 @@ struct CreateCurationSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Name input
                     VStack(alignment: .leading, spacing: 6) {
-                        TextField("Collection name...", text: $vm.name)
+                        TextField("Curation name...", text: $vm.name)
                             .font(.hedvigLettersSerif(24))
                             .textFieldStyle(.plain)
 
@@ -64,7 +64,7 @@ struct CreateCurationSheet: View {
                     }
                 }
             }
-            .navigationTitle(editingList != nil ? "Edit Collection" : "New Collection")
+            .navigationTitle(editingList != nil ? "Edit Curation" : "New Curation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -77,7 +77,7 @@ struct CreateCurationSheet: View {
                         save()
                         dismiss()
                     } label: {
-                        Text(editingList != nil ? "Save Changes" : "Create Collection")
+                        Text(editingList != nil ? "Save Changes" : "Create Curation")
                             .font(.rethinkSans(16, weight: .bold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -92,7 +92,7 @@ struct CreateCurationSheet: View {
                             }
                             dismiss()
                         } label: {
-                            Text("Delete Collection")
+                            Text("Delete Curation")
                                 .font(.rethinkSans(14, weight: .medium))
                         }
                     }

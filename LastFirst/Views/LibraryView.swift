@@ -21,6 +21,7 @@ struct LibraryView: View {
     @State private var showFilterSearch: Bool = false
     @State private var filterKeyword: String = ""
     @State private var filterField: FilterField = .title
+    @State private var selectedReadingList: ReadingList?
     @Namespace private var libraryGlassNamespace
 
     private let ingestionService = DocumentIngestionService()
@@ -72,7 +73,7 @@ struct LibraryView: View {
 
     var body: some View {
         ZStack {
-            Color.warmBackground
+            Color(.systemBackground)
                 .ignoresSafeArea()
 
             if appState.library.isEmpty {
@@ -266,6 +267,12 @@ struct LibraryView: View {
 
     @State private var stickyHeaderHeight: CGFloat = 0
 
+    private var topSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.safeAreaInsets.top ?? 0
+    }
+
     private var stickyHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
             headerBar
@@ -279,17 +286,11 @@ struct LibraryView: View {
         .padding(.bottom, 12)
         .background(
             GeometryReader { geo in
-                Color.warmBackground
+                Color(.systemBackground)
                     .ignoresSafeArea(edges: .top)
                     .preference(key: StickyHeaderHeightKey.self, value: geo.size.height)
             }
         )
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color(hex: "BCB8B1"))
-                .frame(height: 0.5)
-        }
-        .shadow(color: .black.opacity(0.1), radius: 4, y: 4)
     }
 
     private var libraryContent: some View {
@@ -322,11 +323,16 @@ struct LibraryView: View {
         .onPreferenceChange(StickyHeaderHeightKey.self) { height in
             stickyHeaderHeight = height
         }
+        .navigationDestination(item: $selectedReadingList) { list in
+            CurationDetailView(readingList: list)
+                .environmentObject(appState)
+                .environmentObject(readerCoordinator)
+        }
     }
 
     // MARK: - Filter Pills
 
-    private let pillColor = Color.goldAccent
+    private let pillColor = Color.primary
 
     private var filterPillsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -342,9 +348,9 @@ struct LibraryView: View {
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(showFilterSearch ? .white : Color(hex: "1e1e1e"))
+                        .foregroundStyle(Color(UIColor.label))
                         .frame(width: 30, height: 30)
-                        .background(showFilterSearch ? pillColor.opacity(0.6) : pillColor.opacity(0.25))
+                        .background(showFilterSearch ? pillColor.opacity(0.18) : pillColor.opacity(0.08))
                         .clipShape(Capsule())
                 }
 
@@ -377,10 +383,10 @@ struct LibraryView: View {
                 Text(label)
             }
             .font(.rethinkSans(13))
-            .foregroundStyle(Color(hex: "1e1e1e"))
+            .foregroundStyle(Color(UIColor.label))
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
-            .background(pillColor.opacity(isSelected ? 0.40 : 0.25))
+            .background(pillColor.opacity(isSelected ? 0.18 : 0.08))
             .clipShape(Capsule())
         }
     }
@@ -460,16 +466,22 @@ struct LibraryView: View {
 
     private func coverShelfSection(title: String, items: [LibraryItem], list: ReadingList? = nil) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.hedvigLettersSerif(20))
-                Image(systemName: "chevron.forward")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 20)
-            .if(list != nil) { view in
-                view.contextMenu {
+            if let list {
+                Button {
+                    selectedReadingList = list
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(title)
+                            .font(.hedvigLettersSerif(20))
+                            .foregroundStyle(.primary)
+                        Image(systemName: "chevron.forward")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .contextMenu {
                     Button {
                         editingList = list
                         showCurationSheet = true
@@ -477,13 +489,20 @@ struct LibraryView: View {
                         Label("Edit", systemImage: "pencil")
                     }
                     Button(role: .destructive) {
-                        if let list = list {
-                            appState.deleteReadingList(list.id)
-                        }
+                        appState.deleteReadingList(list.id)
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
                 }
+            } else {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(.hedvigLettersSerif(20))
+                    Image(systemName: "chevron.forward")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 20)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -530,7 +549,8 @@ struct LibraryView: View {
             coverURL: item.curatedCoverURL,
             title: item.title,
             iconName: item.coverIconName,
-            ribbonState: item.ribbonState
+            ribbonState: item.ribbonState,
+            flexibleAspectRatio: true
         )
         .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
     }

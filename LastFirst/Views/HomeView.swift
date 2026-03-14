@@ -7,7 +7,6 @@ struct HomeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showStatsSheet = false
     @State private var showDatePicker = false
     @State private var selectedDate = Date()
     @State private var statsVM: ReadingStatsViewModel?
@@ -25,6 +24,7 @@ struct HomeView: View {
 
     // Cover carousel state
     @State private var carouselCenters: [UUID: Int] = [:]
+    @GestureState private var carouselDragOffset: CGFloat = 0
 
     var scrollToTodayTrigger: Bool = false
     var onNavigateToCurator: (() -> Void)?
@@ -42,14 +42,18 @@ struct HomeView: View {
                             ForEach(vm.dayCurations) { day in
                                 dayCurationSection(day)
                                     .containerRelativeFrame(.vertical)
+                                    .background(Color(.systemBackground))
+                                    .clipped()
                                     .id(day.id)
                             }
                         }
 
                         // Stats page — scrolling down past today reveals this
                         if let statsVM {
-                            inlineStatsPage(statsVM: statsVM)
+                            ReadingStatsPageView(statsVM: statsVM)
                                 .containerRelativeFrame(.vertical)
+                                .background(Color(.systemBackground))
+                                .clipped()
                                 .id(statsPageId)
                         }
                     }
@@ -59,7 +63,7 @@ struct HomeView: View {
                 .scrollPosition(id: $currentDayPage)
             }
         }
-        .overlay(alignment: .top) {
+        .safeAreaInset(edge: .top, spacing: 0) {
             if !(appState.library.isEmpty && (timelineVM?.dayCurations.isEmpty ?? true)) {
                 HStack {
                     Button { showAccount = true } label: {
@@ -79,7 +83,8 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.vertical, 12)
+                .background(Color(.systemBackground).ignoresSafeArea(edges: .top))
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -101,27 +106,28 @@ struct HomeView: View {
             }
             await statsVM?.load()
             await timelineVM?.load()
-
-            // Scroll to today on first load
             if !hasScrolledToToday, let todayId = timelineVM?.todayCurationId {
                 hasScrolledToToday = true
-                try? await Task.sleep(for: .milliseconds(300))
                 currentDayPage = todayId
             }
         }
         .onAppear {
             Task { await statsVM?.load() }
         }
+        .onChange(of: timelineVM?.dayCurations.isEmpty) { _, newValue in
+            guard let isEmpty = newValue, !isEmpty,
+                  !hasScrolledToToday,
+                  let todayId = timelineVM?.todayCurationId else { return }
+            hasScrolledToToday = true
+            Task { @MainActor in
+                currentDayPage = todayId
+            }
+        }
         .onChange(of: scrollToTodayTrigger) {
             if let todayId = timelineVM?.todayCurationId {
                 withAnimation {
                     currentDayPage = todayId
                 }
-            }
-        }
-        .sheet(isPresented: $showStatsSheet) {
-            if let statsVM {
-                ReadingStatsSheet(statsVM: statsVM)
             }
         }
         .sheet(isPresented: $showAccount) {
@@ -176,20 +182,19 @@ struct HomeView: View {
 
         VStack(spacing: 0) {
             if !items.isEmpty {
-                // Summary text — scrollable within the page
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        if let summary = day.curation.summary, !summary.isEmpty {
-                            Text(summary)
-                                .font(.rethinkSans(16))
-                                .foregroundStyle(.primary.opacity(0.85))
-                                .lineSpacing(6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                // Summary text
+                VStack(alignment: .leading, spacing: 24) {
+                    if let summary = day.curation.summary, !summary.isEmpty {
+                        Text(summary)
+                            .font(.rethinkSans(16))
+                            .foregroundStyle(.primary.opacity(0.85))
+                            .lineSpacing(6)
+                            .lineLimit(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 72)
                 }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
 
                 Spacer(minLength: 20)
 
@@ -211,8 +216,7 @@ struct HomeView: View {
                 Spacer()
             }
         }
-        .frame(maxWidth: .infinity)
-        .clipped()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             // Load earlier pages when first page appears
             if let vm = timelineVM, day.id == vm.dayCurations.first?.id {
@@ -274,10 +278,17 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity, minHeight: 80)
                 .contentShape(Rectangle())
                 .animation(.easeInOut(duration: 0.3), value: carouselCenters[dayId])
-                .gesture(
-                    DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 15, coordinateSpace: .local)
+                        .updating($carouselDragOffset) { value, state, _ in
+                            if abs(value.translation.width) > abs(value.translation.height) {
+                                state = value.translation.width
+                            }
+                        }
                         .onEnded { value in
                             guard sorted.count > 1 else { return }
+                            guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                            guard abs(value.translation.width) > 30 else { return }
                             let current = carouselCenters[dayId] ?? 0
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 if value.translation.width < 0 {
@@ -443,115 +454,6 @@ struct HomeView: View {
             }
             .nativeGlassButton(shape: .circle)
             .conditionalGlassEffectID("accountAvatar", in: homeGlassNamespace)
-    }
-
-    // MARK: - Inline Stats Page
-
-    private func inlineStatsPage(statsVM: ReadingStatsViewModel) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 24) {
-                // Today section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Today")
-                        .font(.hedvigLettersSerif(20))
-
-                    HStack(spacing: 12) {
-                        SummaryStatCard(
-                            icon: "clock.fill",
-                            iconColor: .blue,
-                            value: formatStatsTime(statsVM.todayReadingSeconds),
-                            label: "Reading Time"
-                        )
-                        SummaryStatCard(
-                            icon: "text.word.spacing",
-                            iconColor: .purple,
-                            value: formatStatsWords(statsVM.todayWordsRead),
-                            label: "Words Read"
-                        )
-                    }
-                }
-
-                Divider()
-
-                // Lifetime stats
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    SummaryStatCard(
-                        icon: "flame.fill",
-                        iconColor: .orange,
-                        value: "\(statsVM.statsCache?.currentStreak ?? 0)",
-                        label: "Current Streak"
-                    )
-                    SummaryStatCard(
-                        icon: "clock.fill",
-                        iconColor: .blue,
-                        value: formatStatsTime(statsVM.statsCache?.totalReadingSeconds ?? 0),
-                        label: "Total Time"
-                    )
-                    SummaryStatCard(
-                        icon: "speedometer",
-                        iconColor: .green,
-                        value: "\(statsVM.statsCache?.lifetimeAvgWPM ?? 0)",
-                        label: "Avg WPM"
-                    )
-                    SummaryStatCard(
-                        icon: "text.word.spacing",
-                        iconColor: .purple,
-                        value: formatStatsWords(statsVM.statsCache?.totalWordsRead ?? 0),
-                        label: "Words Read"
-                    )
-                    SummaryStatCard(
-                        icon: "books.vertical.fill",
-                        iconColor: .indigo,
-                        value: "\(statsVM.statsCache?.booksFinished ?? 0)",
-                        label: "Books"
-                    )
-                    SummaryStatCard(
-                        icon: "calendar",
-                        iconColor: .teal,
-                        value: "\(statsVM.statsCache?.daysRead ?? 0)",
-                        label: "Days Read"
-                    )
-                }
-
-                // "See more" button to open full stats sheet
-                Button {
-                    showStatsSheet = true
-                } label: {
-                    HStack {
-                        Text("View Full Stats")
-                            .font(.rethinkSans(15, weight: .medium))
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundStyle(Color.goldAccent)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 72)
-            .padding(.bottom, 40)
-        }
-        .task { await statsVM.load() }
-    }
-
-    private func formatStatsTime(_ seconds: Int) -> String {
-        if seconds == 0 { return "0m" }
-        let minutes = seconds / 60
-        if minutes < 60 { return "\(max(minutes, 1))m" }
-        let hours = minutes / 60
-        let remainingMinutes = minutes % 60
-        if remainingMinutes == 0 { return "\(hours)h" }
-        return "\(hours)h \(remainingMinutes)m"
-    }
-
-    private func formatStatsWords(_ count: Int) -> String {
-        if count < 1000 { return "\(count)" }
-        if count < 100_000 { return String(format: "%.1fk", Double(count) / 1000.0) }
-        if count < 1_000_000 { return "\(count / 1000)k" }
-        return String(format: "%.1fM", Double(count) / 1_000_000.0)
     }
 
     // MARK: - Empty State
