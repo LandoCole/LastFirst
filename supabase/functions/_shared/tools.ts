@@ -163,7 +163,7 @@ export async function executeTool(
     case "create_curation_item":
       return await createCurationItem(supabase, input);
     case "ingest_url":
-      return await ingestUrl(input);
+      return await ingestUrl(supabase, input);
     default:
       return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   }
@@ -207,30 +207,32 @@ async function getContentDetails(
 
 async function searchWeb(input: Record<string, unknown>): Promise<string> {
   const query = String(input.query ?? "");
-  const numResults = Number(input.num_results ?? 5);
+  const limit = Number(input.num_results ?? 5);
 
-  const serperKey = Deno.env.get("SERPER_API_KEY");
-  if (!serperKey) return JSON.stringify({ error: "SERPER_API_KEY not set" });
+  const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!firecrawlKey) return JSON.stringify({ error: "FIRECRAWL_API_KEY not set" });
 
-  const res = await fetch("https://google.serper.dev/search", {
+  const res = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-API-KEY": serperKey,
+      Authorization: `Bearer ${firecrawlKey}`,
     },
-    body: JSON.stringify({ q: query, num: numResults }),
+    body: JSON.stringify({ query, limit }),
   });
 
   if (!res.ok) {
-    return JSON.stringify({ error: `Serper API error: ${res.status}` });
+    const body = await res.text();
+    console.error("[searchWeb] Firecrawl search error:", res.status, body);
+    return JSON.stringify({ error: `Firecrawl search error: ${res.status}` });
   }
 
   const data = await res.json();
-  const results = (data.organic ?? []).map(
-    (r: { title: string; link: string; snippet: string }) => ({
-      title: r.title,
-      url: r.link,
-      snippet: r.snippet,
+  const results = (data.data ?? []).map(
+    (item: { title: string; url: string; description: string }) => ({
+      title: item.title,
+      url: item.url,
+      snippet: item.description,
     })
   );
 
@@ -258,13 +260,15 @@ async function fetchUrl(input: Record<string, unknown>): Promise<string> {
         const doc = data.data ?? {};
         return JSON.stringify({
           title: doc.metadata?.title ?? "",
-          author: doc.metadata?.author ?? "",
+          author: extractAuthor(doc.metadata ?? {}),
           content: (doc.markdown ?? "").slice(0, 3000),
           url,
         });
+      } else {
+        console.error("[fetchUrl] Firecrawl non-OK response:", res.status, await res.text());
       }
-    } catch {
-      // Fall through to basic fetch
+    } catch (e) {
+      console.error("[fetchUrl] Firecrawl failed:", e);
     }
   }
 
@@ -362,7 +366,10 @@ async function createCurationItem(
   return JSON.stringify({ success: true, item_id: data.id, position: nextPosition });
 }
 
-async function ingestUrl(input: Record<string, unknown>): Promise<string> {
+async function ingestUrl(
+  supabase: SupabaseClient,
+  input: Record<string, unknown>
+): Promise<string> {
   const url = String(input.url ?? "");
   const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
   if (!firecrawlKey) return JSON.stringify({ error: "FIRECRAWL_API_KEY not set" });
@@ -378,18 +385,80 @@ async function ingestUrl(input: Record<string, unknown>): Promise<string> {
     });
 
     if (!res.ok) {
+      const body = await res.text();
+      console.error("[ingestUrl] Firecrawl error:", res.status, body);
       return JSON.stringify({ error: `Firecrawl error: ${res.status}` });
     }
 
     const data = await res.json();
+    const doc = data.data ?? {};
+    const metadata = doc.metadata ?? {};
+    const markdown = doc.markdown ?? "";
+    const html = doc.html ?? "";
+    const title = String(input.title ?? metadata.title ?? "");
+    const author = String(input.author ?? "") || extractAuthor(metadata);
+    const language = metadata.language ?? "en";
+    const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+    const estimatedReadMinutes = Math.max(1, Math.round(wordCount / 238));
+
+    // Persist to content table
+    let contentId: string | null = null;
+    try {
+      const { data: upserted, error: upsertError } = await supabase
+        .from("content")
+        .upsert(
+          {
+            source_type: "web",
+            source_url: url,
+            title,
+            author: author || null,
+            summary: markdown.slice(0, 500),
+            body_text: markdown,
+            body_html: html,
+            language,
+            word_count: wordCount,
+            estimated_read_minutes: estimatedReadMinutes,
+            file_type: "web",
+            is_available: true,
+            metadata: metadata,
+          },
+          { onConflict: "source_url" }
+        )
+        .select("id")
+        .single();
+
+      if (upsertError) {
+        console.error("[ingestUrl] Upsert failed:", upsertError.message);
+      } else {
+        contentId = upserted.id;
+      }
+    } catch (dbError) {
+      console.error("[ingestUrl] DB error:", dbError);
+    }
+
     return JSON.stringify({
       success: true,
-      title: data.data?.metadata?.title ?? input.title ?? "",
-      author: data.data?.metadata?.author ?? input.author ?? "",
-      content_preview: (data.data?.markdown ?? "").slice(0, 500),
+      content_id: contentId,
+      title,
+      author,
+      content_preview: markdown.slice(0, 500),
       url,
     });
   } catch (e) {
+    console.error("[ingestUrl] Ingest failed:", e);
     return JSON.stringify({ error: `Ingest failed: ${String(e)}` });
   }
+}
+
+// --- Helpers ---
+
+function extractAuthor(metadata: Record<string, unknown>): string {
+  return String(
+    metadata?.author ??
+    metadata?.["og:author"] ??
+    metadata?.["article:author"] ??
+    metadata?.["dc.creator"] ??
+    metadata?.["twitter:creator"] ??
+    ""
+  );
 }

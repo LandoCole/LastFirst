@@ -34,3 +34,6 @@ iOSInjectionProject/
 
 # Supabase credentials
 *.xcconfig
+
+# Supabase CLI temp
+supabase/.temp/

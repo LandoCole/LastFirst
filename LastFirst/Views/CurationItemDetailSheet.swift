@@ -215,9 +215,10 @@ struct CurationItemDetailSheet: View {
         isSaved = true
         Task {
             try? await SupabaseManager.shared.markCurationItemSaved(itemId: item.id)
-            if let contentId = item.contentId {
+            if let contentId = item.contentId,
+               let userId {
                 try? await SupabaseManager.shared.postInteraction(
-                    userId: userId ?? UUID(),
+                    userId: userId,
                     contentId: contentId,
                     kind: "bookmark"
                 )

@@ -389,9 +389,9 @@ class ReadingViewModel: ObservableObject {
     /// Get lines for stream mode - teleprompter style where text flows up
     /// Current line is centered, words appear one at a time on current line
     /// Uses same word wrapping as scan mode for consistency
-    func getStreamLines(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat) -> (lines: [WrappedLine], currentLineIndex: Int, wordIndexInLine: Int) {
+    func getStreamLines(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat, horizontalPadding: CGFloat = 48, lineSpacing: CGFloat = 1.5) -> (lines: [WrappedLine], currentLineIndex: Int, wordIndexInLine: Int) {
         // Use same line building as scan mode
-        return getWrappedLines(screenWidth: screenWidth, fontSize: fontSize, availableHeight: availableHeight)
+        return getWrappedLines(screenWidth: screenWidth, fontSize: fontSize, availableHeight: availableHeight, horizontalPadding: horizontalPadding, lineSpacing: lineSpacing)
     }
 
     // MARK: - Navigation
@@ -549,9 +549,8 @@ class ReadingViewModel: ObservableObject {
     }
     
     /// Build lines based on actual word widths to prevent overflow
-    private func buildLinesWithWordWrapping(screenWidth: CGFloat, fontSize: CGFloat) -> [WrappedLine] {
-        let padding: CGFloat = 48
-        let maxLineWidth = screenWidth - padding
+    private func buildLinesWithWordWrapping(screenWidth: CGFloat, fontSize: CGFloat, horizontalPadding: CGFloat = 48) -> [WrappedLine] {
+        let maxLineWidth = screenWidth - horizontalPadding
         
         var lines: [WrappedLine] = []
         var currentLine: [String] = []
@@ -601,20 +600,22 @@ class ReadingViewModel: ObservableObject {
     private var cachedLines: [WrappedLine]?
     private var cachedScreenWidth: CGFloat = 0
     private var cachedFontSize: CGFloat = 0
-    
-    func getWrappedLines(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat) -> (lines: [WrappedLine], currentLineIndex: Int, wordIndexInLine: Int) {
+    private var cachedHorizontalPadding: CGFloat = 0
+
+    func getWrappedLines(screenWidth: CGFloat, fontSize: CGFloat, availableHeight: CGFloat, horizontalPadding: CGFloat = 48, lineSpacing: CGFloat = 1.5) -> (lines: [WrappedLine], currentLineIndex: Int, wordIndexInLine: Int) {
         // Rebuild lines if parameters changed
-        if cachedLines == nil || cachedScreenWidth != screenWidth || cachedFontSize != fontSize {
-            cachedLines = buildLinesWithWordWrapping(screenWidth: screenWidth, fontSize: fontSize)
+        if cachedLines == nil || cachedScreenWidth != screenWidth || cachedFontSize != fontSize || cachedHorizontalPadding != horizontalPadding {
+            cachedLines = buildLinesWithWordWrapping(screenWidth: screenWidth, fontSize: fontSize, horizontalPadding: horizontalPadding)
             cachedScreenWidth = screenWidth
             cachedFontSize = fontSize
+            cachedHorizontalPadding = horizontalPadding
         }
-        
+
         guard let allLines = cachedLines, !allLines.isEmpty else {
             return ([], 0, 0)
         }
-        
-        let lineHeight = fontSize * 1.5
+
+        let lineHeight = fontSize * lineSpacing
         let maxLines = max(3, Int(availableHeight / lineHeight))
         
         // Find which line contains the current word

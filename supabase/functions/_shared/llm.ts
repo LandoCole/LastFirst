@@ -16,14 +16,28 @@ export function resolveProvider(model: string): LLMProvider {
 }
 
 export function resolveModelId(model: string, provider: LLMProvider): string {
+  const trimmed = model.trim();
+  if (!trimmed) {
+    switch (provider) {
+      case "openai":
+        return "gpt-4o";
+      case "google":
+        return "gemini-2.0-flash";
+      case "anthropic":
+      default:
+        return "claude-sonnet-4-20250514";
+    }
+  }
+
+  const lower = trimmed.toLowerCase();
   switch (provider) {
     case "openai":
-      return "gpt-4o";
+      return lower.includes("gpt") ? trimmed : "gpt-4o";
     case "google":
-      return "gemini-2.0-flash";
+      return lower.includes("gemini") ? trimmed : "gemini-2.0-flash";
     case "anthropic":
     default:
-      return "claude-sonnet-4-20250514";
+      return lower.includes("claude") ? trimmed : "claude-sonnet-4-20250514";
   }
 }
 

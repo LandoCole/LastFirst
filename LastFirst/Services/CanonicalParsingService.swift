@@ -301,7 +301,7 @@ actor CanonicalParsingService {
             let text = result.textContent.isEmpty ? result.markdown : result.textContent
             return (result.title, htmlContent, text, result.byline, result.siteName, result.language)
         } catch {
-            print("[CanonicalParsingService] Firecrawl failed, falling back to Readability: \(error)")
+            print("[CanonicalParsingService] scrape-url edge function failed during web ingestion, falling back to Readability: \(error)")
         }
 
         // Fallback: Readability (client-side, static HTML only)

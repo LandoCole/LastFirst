@@ -395,10 +395,23 @@ async function runInlineAgentLoop(
             },
           ],
         });
-      } else {
+      } else if (provider === "openai") {
         messages.push({
-          role: "tool" as string,
+          role: "tool",
+          tool_call_id: tc.id,
           content: toolResult,
+        } as unknown as { role: string; content: unknown });
+      } else {
+        // Gemini: function response format
+        messages.push({
+          role: "user",
+          content: [
+            {
+              type: "function_response",
+              name: tc.name,
+              response: { content: toolResult },
+            },
+          ],
         });
       }
     }

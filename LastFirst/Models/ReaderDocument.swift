@@ -717,3 +717,118 @@ struct CanonicalDocumentPackages: Codable, Sendable {
         self.textAnchorsPackage = textAnchorsPackage
     }
 }
+
+ enum SpeedCleanProfile: String, Codable, Sendable {
+     case book
+     case article
+     case pdfPaper
+ }
+
+ enum SpeedCleanDeliveryMode: String, Codable, Sendable {
+     case onDevice
+     case serverFallback
+     case hybrid
+ }
+
+ enum SpeedCleanChunkStatus: String, Codable, Sendable {
+     case notStarted
+     case processing
+     case ready
+     case failed
+ }
+
+ enum SpeedCleanOverallStatus: String, Codable, Sendable {
+     case notStarted
+     case processing
+     case partial
+     case ready
+     case failed
+ }
+
+ struct SpeedCleanChunk: Identifiable, Codable, Sendable {
+     var id: String { segmentID }
+     var segmentID: String
+     var unitID: String
+     var cleanedText: String
+     var status: SpeedCleanChunkStatus
+     var deliveryMode: SpeedCleanDeliveryMode?
+     var updatedAt: Date
+
+     init(
+         segmentID: String,
+         unitID: String,
+         cleanedText: String,
+         status: SpeedCleanChunkStatus,
+         deliveryMode: SpeedCleanDeliveryMode? = nil,
+         updatedAt: Date = Date()
+     ) {
+         self.segmentID = segmentID
+         self.unitID = unitID
+         self.cleanedText = cleanedText
+         self.status = status
+         self.deliveryMode = deliveryMode
+         self.updatedAt = updatedAt
+     }
+ }
+
+ struct SpeedCleanPackage: Codable, Sendable {
+     var documentId: UUID
+     var profile: SpeedCleanProfile
+     var deliveryMode: SpeedCleanDeliveryMode
+     var status: SpeedCleanOverallStatus
+     var chunks: [SpeedCleanChunk]
+     var createdAt: Date
+     var updatedAt: Date
+
+     init(
+         documentId: UUID,
+         profile: SpeedCleanProfile,
+         deliveryMode: SpeedCleanDeliveryMode = .onDevice,
+         status: SpeedCleanOverallStatus = .notStarted,
+         chunks: [SpeedCleanChunk],
+         createdAt: Date = Date(),
+         updatedAt: Date = Date()
+     ) {
+         self.documentId = documentId
+         self.profile = profile
+         self.deliveryMode = deliveryMode
+         self.status = status
+         self.chunks = chunks
+         self.createdAt = createdAt
+         self.updatedAt = updatedAt
+     }
+
+     func chunk(for segmentID: String) -> SpeedCleanChunk? {
+         chunks.first(where: { $0.segmentID == segmentID })
+     }
+
+     func isUnitReady(_ unitID: String, segmentIDs: [String]) -> Bool {
+         unitStatus(unitID, segmentIDs: segmentIDs) == .ready
+     }
+
+     func unitStatus(_ unitID: String, segmentIDs: [String]) -> SpeedCleanOverallStatus {
+         let relevantSegmentIDs = Set(segmentIDs)
+         guard !relevantSegmentIDs.isEmpty else { return .notStarted }
+         let relevantChunks = chunks.filter {
+             $0.unitID == unitID && relevantSegmentIDs.contains($0.segmentID)
+         }
+         guard !relevantChunks.isEmpty else {
+             return .notStarted
+         }
+
+         if relevantChunks.allSatisfy({ $0.status == .ready }) && Set(relevantChunks.map(\.segmentID)) == relevantSegmentIDs {
+             return .ready
+         }
+         if relevantChunks.contains(where: { $0.status == .processing }) {
+             return .processing
+         }
+         if relevantChunks.contains(where: { $0.status == .ready }) {
+             return .partial
+         }
+         if relevantChunks.contains(where: { $0.status == .failed }) {
+             return .failed
+         }
+         return .notStarted
+     }
+ }
+

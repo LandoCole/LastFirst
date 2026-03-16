@@ -7,7 +7,8 @@ enum ReaderThemePresetID: String, Codable, CaseIterable, Identifiable {
     case paper
     case bold
     case calm
-    case focus
+    case legal
+    case blueprint
 
     var id: String { rawValue }
 
@@ -18,7 +19,8 @@ enum ReaderThemePresetID: String, Codable, CaseIterable, Identifiable {
         case .paper: return "Paper"
         case .bold: return "Bold"
         case .calm: return "Calm"
-        case .focus: return "Focus"
+        case .legal: return "Legal"
+        case .blueprint: return "Blueprint"
         }
     }
 }
@@ -31,6 +33,23 @@ enum ReaderThemeVariant: String, Codable {
 enum ReaderBackgroundPattern: String, Codable {
     case none
     case dots
+    case legal
+    case blueprint
+
+    var hasRuledLines: Bool {
+        self == .legal || self == .blueprint
+    }
+
+    var hasFixedLeftMargin: Bool {
+        self == .legal
+    }
+
+    var disablesJustification: Bool {
+        self == .legal
+    }
+
+    static let legalMarginX: CGFloat = 60
+    static let legalMarginGap: CGFloat = 8
 }
 
 enum ReaderFont: String, Codable, CaseIterable, Identifiable {
@@ -109,6 +128,66 @@ struct ReaderThemeDefinition: Codable, Equatable {
     let textJustified: Bool
 }
 
+// MARK: - Theme ID (preset or custom)
+
+enum ThemeID: Codable, Equatable, Hashable {
+    case preset(ReaderThemePresetID)
+    case custom(UUID)
+
+    var isCustom: Bool {
+        if case .custom = self { return true }
+        return false
+    }
+
+    var stringKey: String {
+        switch self {
+        case .preset(let id): return "preset_\(id.rawValue)"
+        case .custom(let uuid): return "custom_\(uuid.uuidString)"
+        }
+    }
+
+    // Custom Codable — encode as a string for JSON compatibility
+    enum CodingKeys: String, CodingKey {
+        case type, value
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "preset":
+            let id = try container.decode(ReaderThemePresetID.self, forKey: .value)
+            self = .preset(id)
+        case "custom":
+            let uuid = try container.decode(UUID.self, forKey: .value)
+            self = .custom(uuid)
+        default:
+            self = .preset(.original)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .preset(let id):
+            try container.encode("preset", forKey: .type)
+            try container.encode(id, forKey: .value)
+        case .custom(let uuid):
+            try container.encode("custom", forKey: .type)
+            try container.encode(uuid, forKey: .value)
+        }
+    }
+}
+
+// MARK: - Custom Theme
+
+struct CustomTheme: Codable, Equatable, Identifiable {
+    let id: UUID
+    var name: String
+    var lightDefinition: ReaderThemeDefinition
+    var darkDefinition: ReaderThemeDefinition
+}
+
 struct ReaderThemeOverride: Codable, Equatable {
     var isEnabled: Bool
     var font: ReaderFont?
@@ -121,8 +200,20 @@ struct ReaderThemeOverride: Codable, Equatable {
 }
 
 struct ReaderThemeSettings: Codable, Equatable {
-    var selectedPreset: ReaderThemePresetID
+    var selectedThemeID: ThemeID
     var overrides: [String: ReaderThemeOverride]
+    var customThemes: [CustomTheme]
+
+    // Backward-compatible computed property
+    var selectedPreset: ReaderThemePresetID {
+        get {
+            if case .preset(let id) = selectedThemeID { return id }
+            return .original
+        }
+        set {
+            selectedThemeID = .preset(newValue)
+        }
+    }
 
     static let minFontSize: CGFloat = 16
     static let maxFontSize: CGFloat = 48
@@ -136,11 +227,42 @@ struct ReaderThemeSettings: Codable, Equatable {
     static let maxWordSpacing: Double = 0.18
 
     init(
-        selectedPreset: ReaderThemePresetID = .original,
-        overrides: [String: ReaderThemeOverride] = [:]
+        selectedThemeID: ThemeID = .preset(.original),
+        overrides: [String: ReaderThemeOverride] = [:],
+        customThemes: [CustomTheme] = []
     ) {
-        self.selectedPreset = selectedPreset
+        self.selectedThemeID = selectedThemeID
         self.overrides = overrides
+        self.customThemes = customThemes
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case selectedThemeID
+        case selectedPreset // legacy key
+        case overrides
+        case customThemes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        overrides = try container.decodeIfPresent([String: ReaderThemeOverride].self, forKey: .overrides) ?? [:]
+        customThemes = try container.decodeIfPresent([CustomTheme].self, forKey: .customThemes) ?? []
+
+        // Try new key first, fall back to legacy selectedPreset
+        if let themeID = try container.decodeIfPresent(ThemeID.self, forKey: .selectedThemeID) {
+            selectedThemeID = themeID
+        } else if let legacyPreset = try container.decodeIfPresent(ReaderThemePresetID.self, forKey: .selectedPreset) {
+            selectedThemeID = .preset(legacyPreset)
+        } else {
+            selectedThemeID = .preset(.original)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(selectedThemeID, forKey: .selectedThemeID)
+        try container.encode(overrides, forKey: .overrides)
+        try container.encode(customThemes, forKey: .customThemes)
     }
 
     func override(for preset: ReaderThemePresetID) -> ReaderThemeOverride? {
@@ -157,6 +279,26 @@ struct ReaderThemeSettings: Codable, Equatable {
 
     mutating func resetOverride(for preset: ReaderThemePresetID) {
         overrides.removeValue(forKey: preset.rawValue)
+    }
+
+    // MARK: - Custom Theme Management
+
+    mutating func addCustomTheme(_ theme: CustomTheme) {
+        customThemes.append(theme)
+        selectedThemeID = .custom(theme.id)
+    }
+
+    mutating func updateCustomTheme(_ theme: CustomTheme) {
+        if let index = customThemes.firstIndex(where: { $0.id == theme.id }) {
+            customThemes[index] = theme
+        }
+    }
+
+    mutating func deleteCustomTheme(id: UUID) {
+        customThemes.removeAll { $0.id == id }
+        if case .custom(let selectedID) = selectedThemeID, selectedID == id {
+            selectedThemeID = .preset(.original)
+        }
     }
 
     static func defaultTheme(for preset: ReaderThemePresetID, variant: ReaderThemeVariant) -> ReaderThemeDefinition {
@@ -311,34 +453,64 @@ struct ReaderThemeSettings: Codable, Equatable {
                 margin: 26,
                 textJustified: true
             )
-        case (.focus, .light):
+        case (.legal, .light):
             return ReaderThemeDefinition(
-                backgroundColorHex: "#FFFDF7",
-                textColorHex: "#111111",
-                secondaryTextColorHex: "#4B4743",
-                linkColorHex: "#2F2C29",
-                pattern: .none,
-                font: .systemSerif,
+                backgroundColorHex: "#FFF9C4",
+                textColorHex: "#2C2416",
+                secondaryTextColorHex: "#6B5D4A",
+                linkColorHex: "#3D3225",
+                pattern: .legal,
+                font: .classicSerif,
                 bold: false,
-                lineSpacing: 1.35,
+                lineSpacing: 1.5,
                 letterSpacing: 0.0,
                 wordSpacing: 0.0,
-                margin: 16,
+                margin: 24,
                 textJustified: false
             )
-        case (.focus, .dark):
+        case (.legal, .dark):
             return ReaderThemeDefinition(
-                backgroundColorHex: "#0F0F10",
-                textColorHex: "#F8F5F1",
-                secondaryTextColorHex: "#C1BCB6",
-                linkColorHex: "#E3DED9",
-                pattern: .none,
-                font: .systemSerif,
+                backgroundColorHex: "#2A2418",
+                textColorHex: "#E8DFC8",
+                secondaryTextColorHex: "#B5A88E",
+                linkColorHex: "#D4C8AE",
+                pattern: .legal,
+                font: .classicSerif,
                 bold: false,
-                lineSpacing: 1.35,
+                lineSpacing: 1.5,
                 letterSpacing: 0.0,
                 wordSpacing: 0.0,
-                margin: 16,
+                margin: 24,
+                textJustified: false
+            )
+        case (.blueprint, .light):
+            return ReaderThemeDefinition(
+                backgroundColorHex: "#1A237E",
+                textColorHex: "#E8EAF6",
+                secondaryTextColorHex: "#9FA8DA",
+                linkColorHex: "#C5CAE9",
+                pattern: .blueprint,
+                font: .systemSans,
+                bold: false,
+                lineSpacing: 1.45,
+                letterSpacing: 0.0,
+                wordSpacing: 0.0,
+                margin: 22,
+                textJustified: false
+            )
+        case (.blueprint, .dark):
+            return ReaderThemeDefinition(
+                backgroundColorHex: "#0D1117",
+                textColorHex: "#C9D1D9",
+                secondaryTextColorHex: "#8B949E",
+                linkColorHex: "#58A6FF",
+                pattern: .blueprint,
+                font: .systemSans,
+                bold: false,
+                lineSpacing: 1.45,
+                letterSpacing: 0.0,
+                wordSpacing: 0.0,
+                margin: 22,
                 textJustified: false
             )
         }
@@ -346,7 +518,7 @@ struct ReaderThemeSettings: Codable, Equatable {
 }
 
 struct ResolvedReaderTheme: Equatable {
-    let preset: ReaderThemePresetID
+    let themeID: ThemeID
     let variant: ReaderThemeVariant
     let fontSize: CGFloat
     let definition: ReaderThemeDefinition
@@ -365,7 +537,7 @@ struct ResolvedReaderTheme: Equatable {
 
     var patternCSS: String {
         switch definition.pattern {
-        case .none:
+        case .none, .legal, .blueprint:
             return "none"
         case .dots:
             return "radial-gradient(circle, rgba(0,0,0,0.06) 0.5px, transparent 0.6px)"
@@ -374,10 +546,34 @@ struct ResolvedReaderTheme: Equatable {
 
     var patternSizeCSS: String {
         switch definition.pattern {
-        case .none:
+        case .none, .legal, .blueprint:
             return "auto"
         case .dots:
             return "6px 6px"
+        }
+    }
+
+    var patternOverlayCSS: String {
+        switch definition.pattern {
+        case .none, .dots, .blueprint:
+            return ""
+        case .legal:
+            return """
+            body::before {
+                content: '';
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                pointer-events: none;
+                z-index: 0;
+                background-image:
+                    repeating-linear-gradient(to bottom, transparent, transparent 27px, rgba(100,140,200,0.25) 27px, rgba(100,140,200,0.25) 28px),
+                    linear-gradient(to right, transparent 59px, rgba(200,80,80,0.3) 59px, rgba(200,80,80,0.3) 61px, transparent 61px);
+                -webkit-mask-image:
+                    linear-gradient(to bottom, transparent, black 8%, black 85%, transparent),
+                    linear-gradient(to right, transparent, black 4%, black 96%, transparent);
+                -webkit-mask-composite: source-in;
+            }
+            """
         }
     }
 
@@ -441,6 +637,7 @@ struct ResolvedReaderTheme: Equatable {
             outline: 2px solid orange;
             border-radius: 2px;
         }
+        \(patternOverlayCSS)
         """
     }
 
@@ -511,41 +708,42 @@ extension ReaderThemeSettings {
         fontSize: CGFloat
     ) -> ResolvedReaderTheme {
         let variant = appearanceMode.resolvedVariant(systemScheme: systemScheme)
-        var base = ReaderThemeSettings.defaultTheme(for: selectedPreset, variant: variant)
-        if let override = override(for: selectedPreset), override.isEnabled {
-            if let font = override.font {
-                base = ReaderThemeDefinition(
-                    backgroundColorHex: base.backgroundColorHex,
-                    textColorHex: base.textColorHex,
-                    secondaryTextColorHex: base.secondaryTextColorHex,
-                    linkColorHex: base.linkColorHex,
-                    pattern: base.pattern,
-                    font: font,
-                    bold: override.bold ?? base.bold,
-                    lineSpacing: override.lineSpacing ?? base.lineSpacing,
-                    letterSpacing: override.letterSpacing ?? base.letterSpacing,
-                    wordSpacing: override.wordSpacing ?? base.wordSpacing,
-                    margin: override.margin ?? base.margin,
-                    textJustified: override.textJustified ?? base.textJustified
-                )
+
+        var base: ReaderThemeDefinition
+        switch selectedThemeID {
+        case .preset(let presetID):
+            base = ReaderThemeSettings.defaultTheme(for: presetID, variant: variant)
+            if let override = override(for: presetID), override.isEnabled {
+                base = base.applying(override: override)
+            }
+        case .custom(let uuid):
+            if let custom = customThemes.first(where: { $0.id == uuid }) {
+                base = variant == .light ? custom.lightDefinition : custom.darkDefinition
             } else {
-                base = ReaderThemeDefinition(
-                    backgroundColorHex: base.backgroundColorHex,
-                    textColorHex: base.textColorHex,
-                    secondaryTextColorHex: base.secondaryTextColorHex,
-                    linkColorHex: base.linkColorHex,
-                    pattern: base.pattern,
-                    font: base.font,
-                    bold: override.bold ?? base.bold,
-                    lineSpacing: override.lineSpacing ?? base.lineSpacing,
-                    letterSpacing: override.letterSpacing ?? base.letterSpacing,
-                    wordSpacing: override.wordSpacing ?? base.wordSpacing,
-                    margin: override.margin ?? base.margin,
-                    textJustified: override.textJustified ?? base.textJustified
-                )
+                base = ReaderThemeSettings.defaultTheme(for: .original, variant: variant)
             }
         }
-        return ResolvedReaderTheme(preset: selectedPreset, variant: variant, fontSize: fontSize, definition: base)
+
+        return ResolvedReaderTheme(themeID: selectedThemeID, variant: variant, fontSize: fontSize, definition: base)
+    }
+}
+
+extension ReaderThemeDefinition {
+    func applying(override: ReaderThemeOverride) -> ReaderThemeDefinition {
+        ReaderThemeDefinition(
+            backgroundColorHex: backgroundColorHex,
+            textColorHex: textColorHex,
+            secondaryTextColorHex: secondaryTextColorHex,
+            linkColorHex: linkColorHex,
+            pattern: pattern,
+            font: override.font ?? font,
+            bold: override.bold ?? bold,
+            lineSpacing: override.lineSpacing ?? lineSpacing,
+            letterSpacing: override.letterSpacing ?? letterSpacing,
+            wordSpacing: override.wordSpacing ?? wordSpacing,
+            margin: override.margin ?? margin,
+            textJustified: override.textJustified ?? textJustified
+        )
     }
 }
 
@@ -558,6 +756,23 @@ extension ResolvedReaderTheme {
     var linkColor: Color { Color(hex: definition.linkColorHex) }
     var fontDesign: Font.Design { definition.font.swiftUIDesign }
     var swiftUIFontWeight: Font.Weight { definition.bold ? .semibold : .regular }
+
+    /// Total vertical distance between consecutive ruled lines.
+    func ruledLinePitch(interLineSpacing: CGFloat) -> CGFloat {
+        fontSize * CGFloat(definition.lineSpacing) + interLineSpacing
+    }
+
+    /// Left text padding — fixed for legal, otherwise theme margin
+    var effectiveLeftPadding: CGFloat {
+        definition.pattern.hasFixedLeftMargin
+            ? ReaderBackgroundPattern.legalMarginX + ReaderBackgroundPattern.legalMarginGap
+            : CGFloat(definition.margin)
+    }
+
+    /// Right text padding — always theme margin
+    var effectiveRightPadding: CGFloat {
+        CGFloat(definition.margin)
+    }
 }
 
 // MARK: - Color Hex Initializer
@@ -582,6 +797,18 @@ extension Color {
             green: Double(g) / 255,
             blue: Double(b) / 255,
             opacity: Double(a) / 255
+        )
+    }
+
+    func toHex() -> String {
+        let uiColor = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return String(
+            format: "#%02X%02X%02X",
+            Int(round(r * 255)),
+            Int(round(g * 255)),
+            Int(round(b * 255))
         )
     }
 }

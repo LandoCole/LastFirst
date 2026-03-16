@@ -12,13 +12,6 @@ struct AddContentSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Drag indicator
-            RoundedRectangle(cornerRadius: 2.5)
-                .fill(Color.secondary.opacity(0.4))
-                .frame(width: 36, height: 5)
-                .padding(.top, 10)
-                .padding(.bottom, 20)
-
             VStack(spacing: 0) {
                 addRow(
                     icon: "doc.badge.plus",
@@ -53,13 +46,15 @@ struct AddContentSheet: View {
                     onAction(.newCollection)
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 4)
+            .glassStyle(shape: .card)
+            .padding(.horizontal, 16)
+            .padding(.top, 28)
 
             Spacer()
         }
-        .presentationBackground(.ultraThinMaterial)
         .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
+        .presentationDragIndicator(.visible)
     }
 
     private func addRow(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {

@@ -48,22 +48,59 @@ struct ContentView: View {
         }
         .ignoresSafeArea(.keyboard)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: readerCoordinator.presentationState)
-        .sheet(isPresented: readerCoordinator.isSheetPresented) {
+        .fullScreenSheet(isPresented: readerCoordinator.isSheetPresented) {
             if let viewModel = readerCoordinator.viewModel,
                let item = readerCoordinator.activeItem {
                 ReadingView(viewModel: viewModel, item: item)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(.clear)
                     .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
             }
         }
         .sheet(isPresented: $showCuratorSheet) {
+            curatorSheetContent
+        }
+    }
+
+    @ViewBuilder
+    private var curatorSheetContent: some View {
+        if let userId = authVM.currentUser?.id {
             CuratorView(
                 inputText: $curatorInputText,
-                userId: authVM.currentUser?.id ?? UUID()
+                userId: userId
             )
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        } else {
+            VStack(spacing: 16) {
+                Spacer()
+                Image(systemName: "person.crop.circle.badge.exclamationmark")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.secondary)
+                Text("Sign in to use Curator")
+                    .font(.hedvigLettersSerif(24))
+                Text("Curator uses your account and reading history to research recommendations.")
+                    .font(.rethinkSans(14))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                Button("Sign in or create account") {
+                    showCuratorSheet = false
+                    authVM.skipAuth = false
+                }
+                .font(.rethinkSans(16, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.primary)
+                .foregroundStyle(Color(.systemBackground))
+                .clipShape(Capsule())
+                .padding(.horizontal, 24)
+                Button("Not now") {
+                    showCuratorSheet = false
+                }
+                .font(.rethinkSans(14))
+                .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
     }

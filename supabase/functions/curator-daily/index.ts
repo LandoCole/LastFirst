@@ -1,7 +1,7 @@
 // curator-daily edge function — Scheduled daily curation generation
 // Called by pg_cron. Returns immediately, runs generation in waitUntil.
 
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { Finding } from "../_shared/types.ts";
 import { callAnthropic } from "../_shared/llm.ts";
@@ -32,7 +32,7 @@ function isToday(dateStr: string): boolean {
   );
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

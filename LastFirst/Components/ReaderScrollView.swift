@@ -22,7 +22,7 @@ struct ReaderScrollView: View {
                 let pausedDisplay = viewModel.getPausedDisplayLines(
                     screenWidth: geometry.size.width,
                     fontSize: fontSize,
-                    horizontalPadding: themeMargin * 2,
+                    horizontalPadding: (theme?.effectiveLeftPadding ?? themeMargin) + (theme?.effectiveRightPadding ?? themeMargin),
                     wordSpacing: CGFloat(theme?.definition.wordSpacing ?? 0),
                     letterSpacing: CGFloat(theme?.definition.letterSpacing ?? 0)
                 )
@@ -33,9 +33,24 @@ struct ReaderScrollView: View {
                             pausedLineView(line: line, fontSize: fontSize, lineHeight: lineHeight, themeMargin: themeMargin)
                         }
                     }
-                    .padding(.horizontal, themeMargin)
+                    .padding(.leading, theme?.effectiveLeftPadding ?? themeMargin)
+                    .padding(.trailing, theme?.effectiveRightPadding ?? themeMargin)
                     .padding(.top, topContentInset)
                     .padding(.bottom, 240)
+                    .background {
+                        if let theme, theme.definition.pattern.hasRuledLines {
+                            GeometryReader { contentGeo in
+                                RuledLinesBackground(
+                                    pattern: theme.definition.pattern,
+                                    variant: theme.variant,
+                                    linePitch: lineHeight + 6,
+                                    topOffset: topContentInset + lineHeight / 2 + fontSize * 0.3,
+                                    marginX: theme.definition.pattern.hasFixedLeftMargin ? ReaderBackgroundPattern.legalMarginX : nil,
+                                    contentHeight: contentGeo.size.height
+                                )
+                            }
+                        }
+                    }
                     .background(
                         GeometryReader { contentGeometry in
                             Color.clear.preference(
@@ -69,10 +84,12 @@ struct ReaderScrollView: View {
 
     @ViewBuilder
     private func pausedLineView(line: ReadingViewModel.PausedDisplayLine, fontSize: CGFloat, lineHeight: CGFloat, themeMargin: CGFloat) -> some View {
+        let hasRuledLines = theme?.definition.pattern.hasRuledLines ?? false
+
         switch line.kind {
         case .blank:
             Color.clear
-                .frame(height: fontSize * CGFloat((theme?.definition.lineSpacing ?? 1.6) * 0.56))
+                .frame(height: hasRuledLines ? lineHeight : fontSize * CGFloat((theme?.definition.lineSpacing ?? 1.6) * 0.56))
                 .id(line.id)
 
         case .title(let title, let kind):
@@ -81,8 +98,8 @@ struct ReaderScrollView: View {
                 .tracking(fontSize * CGFloat(theme?.definition.letterSpacing ?? 0))
                 .foregroundColor(theme?.textColor ?? .primary)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, minHeight: hasRuledLines ? lineHeight : nil, alignment: .leading)
+                .padding(.vertical, hasRuledLines ? 0 : 4)
                 .id(line.id)
 
         case .text(let words):
@@ -153,7 +170,7 @@ struct ReaderScrollView: View {
                 .font(.system(size: fontSize - 2, weight: theme?.swiftUIFontWeight ?? .regular, design: .monospaced))
                 .foregroundColor((theme?.textColor ?? .primary).opacity(0.9))
                 .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: hasRuledLines ? lineHeight : nil, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
                         .fill((theme?.textColor ?? .primary).opacity(0.05))
@@ -169,8 +186,8 @@ struct ReaderScrollView: View {
                     .italic()
                     .foregroundColor(theme?.secondaryTextColor ?? .secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: hasRuledLines ? lineHeight : nil, alignment: .leading)
+            .padding(.vertical, hasRuledLines ? 0 : 4)
             .id(line.id)
         }
     }

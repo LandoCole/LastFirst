@@ -30,6 +30,24 @@ struct SpritzModeView: View {
                 }
                 Spacer()
             }
+            .background {
+                if theme.definition.pattern.hasRuledLines {
+                    let linePitch = theme.ruledLinePitch(interLineSpacing: 0)
+                    let centerY = geometry.size.height / 2 + theme.fontSize * 0.3
+                    let topOffset = centerY.truncatingRemainder(dividingBy: linePitch)
+
+                    RuledLinesBackground(
+                        pattern: theme.definition.pattern,
+                        variant: theme.variant,
+                        linePitch: linePitch,
+                        topOffset: topOffset,
+                        marginX: theme.definition.pattern.hasFixedLeftMargin ? ReaderBackgroundPattern.legalMarginX : nil,
+                        contentHeight: geometry.size.height,
+                        topFadeHeight: 60,
+                        bottomFadeHeight: 60
+                    )
+                }
+            }
         }
     }
 

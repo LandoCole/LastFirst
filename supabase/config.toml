@@ -1,0 +1,2 @@
+[functions.scrape-url]
+verify_jwt = false

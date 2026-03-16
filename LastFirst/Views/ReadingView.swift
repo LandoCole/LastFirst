@@ -44,248 +44,328 @@ struct ReadingView: View {
 
     // TOC state
     @State private var showTOC: Bool = false
+    @State private var pendingPolishChapter: Chapter?
+    @State private var showPolishDialog: Bool = false
+
+    init(viewModel: ReadingViewModel, item: LibraryItem) {
+        _viewModel = ObservedObject(wrappedValue: viewModel)
+        self.item = item
+    }
 
     // Convenience: whether a bottom tab is active (dial/progress should collapse)
     private var isBottomTabActive: Bool {
         activeBottomTab != .none
     }
 
-    var body: some View {
-        GeometryReader { geometry in
-            // Check if auto-hide applies (stream mode only)
-            let autoHideApplies = viewModel.readingMode == .stream
-            let effectivelyHidden = isDialHidden && autoHideApplies && appState.settings.autoHideDialDelay != .off
+    private var presentationVerticalOffset: CGFloat {
+        -24
+    }
 
-            let isSpritzMode = viewModel.readingMode == .spritz
-            // Adjust reading area based on dial mode and auto-hide
-            let readingAreaHeight: CGFloat = {
-                if isBottomTabActive {
-                    return geometry.size.height - 50 // minus bottom tab bar
+    private var baseContent: AnyView {
+        AnyView(
+            GeometryReader { geometry in
+                mainContent(geometry: geometry)
+            }
+            .offset(y: presentationVerticalOffset)
+        )
+    }
+
+    private var interactionContent: AnyView {
+        AnyView(
+            baseContent
+                .onChange(of: appState.settings.paragraphBreathMs) { _, newValue in
+                    viewModel.setParagraphBreathMs(newValue)
                 }
-                if isSpritzMode {
-                    return geometry.size.height * 0.60
+                .onDisappear {
+                    dialActivityTimer?.invalidate()
+                    stopHoldStream()
                 }
-                // Stream mode
-                if effectivelyHidden {
-                    return geometry.size.height * 0.95
+                .onChange(of: viewModel.wordsPerMinute) { _, _ in
+                    resetDialActivityTimer()
                 }
-                switch appState.settings.dialStyle {
-                case .radial: return geometry.size.height * 0.48
-                case .collapsed: return geometry.size.height * 0.85
+                .onChange(of: appState.settings.autoHideDialDelay) { _, _ in
+                    resetDialActivityTimer()
                 }
-            }()
-
-            ZStack {
-                // Background - always use theme color
-                resolvedTheme.backgroundColor
-                    .ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // Reading area
-                    readingArea(geometry: geometry, height: readingAreaHeight)
-                        .frame(height: readingAreaHeight)
-                        .animation(.easeInOut(duration: 0.3), value: appState.settings.dialStyle)
-                        .animation(.easeInOut(duration: 0.3), value: activeBottomTab)
-
-                    Spacer()
-                }
-
-                // Gradient fades for browse/tab content modes
-                if isBottomTabActive {
-                    VStack {
-                        // Top fade
-                        LinearGradient(
-                            colors: [resolvedTheme.backgroundColor, resolvedTheme.backgroundColor.opacity(0)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 40)
-                        .allowsHitTesting(false)
-
-                        Spacer()
-
-                        // Bottom fade (above tab bar)
-                        LinearGradient(
-                            colors: [resolvedTheme.backgroundColor.opacity(0), resolvedTheme.backgroundColor],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 40)
-                        .padding(.bottom, 50) // tab bar height
-                        .allowsHitTesting(false)
+                .onChange(of: viewModel.readingMode) { _, _ in
+                    resetDialActivityTimer()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        activeBottomTab = .none
                     }
-                    .ignoresSafeArea(edges: .top)
                 }
-
-                // Dial + progress at bottom (slides down when bottom tab is active)
-                VStack(spacing: 0) {
-                    Spacer()
-
-                    ProgressScrubber(viewModel: viewModel, theme: resolvedTheme)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 2)
-
-                    // More menu row — below progress bar, left-aligned
-                    HStack {
-                        moreMenuButton
-                        Spacer()
+                .onChange(of: viewModel.isPlaying) { _, isPlaying in
+                    if isPlaying {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            activeBottomTab = .none
+                        }
                     }
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, 4)
+                }
+                .onChange(of: activeBottomTab) { _, newValue in
+                    if newValue != .browse {
+                        browseControlsVisible = true
+                    }
+                }
+                .onChange(of: appState.settings.dialStyle) { _, newStyle in
+                    if newStyle == .collapsed {
+                        withAnimation {
+                            isDialHidden = false
+                        }
+                        dialActivityTimer?.invalidate()
+                        dialActivityTimer = nil
+                    }
+                }
+        )
+    }
 
-                    LiquidGlassSpeedDial(
-                        wpm: $viewModel.wordsPerMinute,
-                        isPlaying: $viewModel.isPlaying,
-                        controlColor: resolvedTheme.secondaryTextColor,
-                        onPlayPauseToggle: {
-                            viewModel.togglePlayPause()
-                        },
-                        onRewind: {
-                            viewModel.rewindToSentenceStart()
-                        },
-                        onForwardSentence: {
-                            viewModel.forwardToNextSentenceEnd()
-                        },
-                        onAddBookmark: {
-                            quickSaveBookmark()
-                        },
-                        onHoldRewind: {
-                            startHoldStream(forward: false)
-                        },
-                        onHoldForward: {
-                            startHoldStream(forward: true)
-                        },
-                        onHoldRelease: {
-                            stopHoldStream()
+    private var presentationContent: AnyView {
+        AnyView(
+            interactionContent
+                .sheet(isPresented: $showImages) {
+                    ArtifactsView(
+                        documentId: item.documentId,
+                        initialTab: artifactsInitialTab,
+                        onNavigateToBookmark: { annotation in
+                            viewModel.goToTokenIndex(annotation.range.start.tokenIndex)
                         }
                     )
-                    .padding(.bottom, 52) // Clear the bottom tab bar
                 }
-                .offset(y: isBottomTabActive ? 300 : 0)
-                .opacity(isBottomTabActive ? 0 : (effectivelyHidden ? 0 : 1))
-                .allowsHitTesting(!isBottomTabActive && !effectivelyHidden)
+                .onChange(of: showImages) { _, isShowing in
+                    if !isShowing {
+                        artifactsInitialTab = nil
+                    }
+                }
+                .sheet(isPresented: $showThemes) {
+                    ThemesSettingsView()
+                        .presentationDragIndicator(.visible)
+                        .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
+                }
+                .sheet(isPresented: $showTOC) {
+                    TOCSheetView(
+                        tocEntries: [],
+                        chapters: viewModel.chapters,
+                        currentChapterTitle: currentChapterTitle,
+                        pageList: readerCoordinator.canonicalPackages?.textAnchorsPackage.pageList ?? [],
+                        onNavigate: { chapter in
+                            handleChapterSelection(chapter)
+                        }
+                    )
+                }
+        )
+    }
 
-                // Bookmark creation overlay
-                if viewModel.isCreatingBookmark {
-                    bookmarkCreationOverlay
+    private var dialogContent: AnyView {
+        AnyView(
+            presentationContent
+                .alert("Error Loading Book", isPresented: $showErrorAlert) {
+                    Button("OK") {
+                        showErrorAlert = false
+                    }
+                    Button("Return to Library") {
+                        showErrorAlert = false
+                        readerCoordinator.dismiss(appState: appState)
+                    }
+                } message: {
+                    Text(errorMessage)
                 }
-            }
-            .overlay(alignment: .bottom) {
-                bottomTabBar
-            }
-        }
-        .onChange(of: appState.settings.paragraphBreathMs) { _, newValue in
-            viewModel.setParagraphBreathMs(newValue)
-        }
-        .onDisappear {
-            dialActivityTimer?.invalidate()
-            stopHoldStream()
-        }
-        .onChange(of: viewModel.wordsPerMinute) { _, _ in
-            resetDialActivityTimer()
-        }
-        .onChange(of: appState.settings.autoHideDialDelay) { _, _ in
-            resetDialActivityTimer()
-        }
-        .onChange(of: viewModel.readingMode) { _, newMode in
-            resetDialActivityTimer()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                activeBottomTab = .none
-            }
-        }
-        .onChange(of: viewModel.isPlaying) { _, isPlaying in
-            if isPlaying {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    activeBottomTab = .none
+                .confirmationDialog(
+                    "This chapter can be polished for a smoother speed-reading experience.",
+                    isPresented: $showPolishDialog,
+                    titleVisibility: .visible,
+                    presenting: pendingPolishChapter
+                ) { chapter in
+                    Button("Read Now") {
+                        viewModel.goToChapter(chapter)
+                        pendingPolishChapter = nil
+                    }
+                    Button("Polish Up, Read in a Few") {
+                        Task {
+                            await readerCoordinator.polishChapterAndNavigate(chapter, appState: appState)
+                            pendingPolishChapter = nil
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {
+                        pendingPolishChapter = nil
+                    }
+                } message: { _ in
+                    Text("Polish Up improves pacing and readability for speed reading without changing the meaning.")
                 }
-            }
-        }
-        .onChange(of: activeBottomTab) { _, newValue in
-            if newValue != .browse {
-                browseControlsVisible = true
-            }
-        }
-        .onChange(of: appState.settings.dialStyle) { _, newStyle in
-            if newStyle == .collapsed {
-                withAnimation {
-                    isDialHidden = false
+        )
+    }
+
+    private var decoratedContent: AnyView {
+        AnyView(
+            dialogContent
+                .overlay {
+                    if readerCoordinator.isLoadingContent || readerCoordinator.isPolishingText {
+                        loadingOverlay
+                    }
                 }
-                dialActivityTimer?.invalidate()
-                dialActivityTimer = nil
-            }
-        }
-        .sheet(isPresented: $showImages) {
-            ArtifactsView(
-                documentId: item.documentId,
-                initialTab: artifactsInitialTab,
-                onNavigateToBookmark: { annotation in
-                    viewModel.goToTokenIndex(annotation.range.start.tokenIndex)
+                .overlay(alignment: .top) {
+                    speedCleanStatusBanner
                 }
-            )
-        }
-        .onChange(of: showImages) { _, isShowing in
-            if !isShowing {
-                artifactsInitialTab = nil
-            }
-        }
-        .sheet(isPresented: $showThemes) {
-            ThemesSettingsView()
-                .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
-                .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
-        }
-        .sheet(isPresented: $showTOC) {
-            TOCSheetView(
-                tocEntries: [],
-                chapters: viewModel.chapters,
-                currentChapterTitle: currentChapterTitle,
-                pageList: readerCoordinator.canonicalPackages?.textAnchorsPackage.pageList ?? [],
-                onNavigate: { chapter in
-                    viewModel.goToChapter(chapter)
+                .overlay {
+                    Color.black
+                        .opacity(max(0, min(1, 1 - appState.settings.readerBrightness)))
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
                 }
-            )
-        }
-        .alert("Error Loading Book", isPresented: $showErrorAlert) {
-            Button("OK") {
-                showErrorAlert = false
-            }
-            Button("Return to Library") {
-                showErrorAlert = false
-                readerCoordinator.dismiss(appState: appState)
-            }
-        } message: {
-            Text(errorMessage)
-        }
-        .overlay {
-            if viewModel.isLoading {
-                loadingOverlay
-            }
-        }
-        .overlay {
-            Color.black
-                .opacity(max(0, min(1, 1 - appState.settings.readerBrightness)))
+                .sheet(isPresented: $showSearch) {
+                    SearchSheetView(
+                        isPresented: $showSearch,
+                        onSearch: { query in
+                            performSearch(query: query)
+                        },
+                        tokenResults: tokenSearchResults,
+                        onResultTapped: { result in
+                            viewModel.goToWord(at: result.wordIndex)
+                        }
+                    )
+                    .presentationDragIndicator(.visible)
+                }
+                .onChange(of: showSearch) { _, isShowing in
+                    if !isShowing {
+                        tokenSearchResults = []
+                        searchMatchCount = 0
+                        searchCurrentIndex = 0
+                    }
+                }
+        )
+    }
+
+    var body: some View {
+        decoratedContent
+    }
+
+    private func mainContent(geometry: GeometryProxy) -> some View {
+        let autoHideApplies = viewModel.readingMode == .stream
+        let effectivelyHidden = isDialHidden && autoHideApplies && appState.settings.autoHideDialDelay != .off
+        let isSpritzMode = viewModel.readingMode == .spritz
+        let readingAreaHeight = currentReadingAreaHeight(
+            geometry: geometry,
+            isSpritzMode: isSpritzMode,
+            effectivelyHidden: effectivelyHidden
+        )
+
+        return ZStack {
+            resolvedTheme.backgroundColor
                 .ignoresSafeArea()
-                .allowsHitTesting(false)
-        }
-        .sheet(isPresented: $showSearch) {
-            SearchSheetView(
-                isPresented: $showSearch,
-                onSearch: { query in
-                    performSearch(query: query)
-                },
-                tokenResults: tokenSearchResults,
-                onResultTapped: { result in
-                    viewModel.goToWord(at: result.wordIndex)
-                }
+
+            ThemePatternOverlay(
+                pattern: staticOverlayPattern,
+                variant: resolvedTheme.variant,
+                compact: false
             )
-            .presentationDragIndicator(.visible)
-        }
-        .onChange(of: showSearch) { _, isShowing in
-            if !isShowing {
-                tokenSearchResults = []
-                searchMatchCount = 0
-                searchCurrentIndex = 0
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+                readingArea(geometry: geometry, height: readingAreaHeight)
+                    .frame(height: readingAreaHeight)
+                    .animation(.easeInOut(duration: 0.3), value: appState.settings.dialStyle)
+                    .animation(.easeInOut(duration: 0.3), value: activeBottomTab)
+
+                Spacer()
             }
+
+            if isBottomTabActive {
+                let bgColor = resolvedTheme.backgroundColor
+                VStack {
+                    LinearGradient(
+                        colors: [bgColor, bgColor.opacity(0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 40)
+                    .allowsHitTesting(false)
+
+                    Spacer()
+
+                    LinearGradient(
+                        colors: [bgColor.opacity(0), bgColor],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 40)
+                    .padding(.bottom, 50)
+                    .allowsHitTesting(false)
+                }
+                .ignoresSafeArea(edges: .top)
+            }
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                ProgressScrubber(viewModel: viewModel, theme: resolvedTheme)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 2)
+
+                HStack {
+                    readerControlsMenu
+                    Spacer()
+                    contentExploreMenu
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 4)
+
+                LiquidGlassSpeedDial(
+                    wpm: $viewModel.wordsPerMinute,
+                    isPlaying: $viewModel.isPlaying,
+                    controlColor: resolvedTheme.secondaryTextColor,
+                    onPlayPauseToggle: {
+                        viewModel.togglePlayPause()
+                    },
+                    onRewind: {
+                        viewModel.rewindToSentenceStart()
+                    },
+                    onForwardSentence: {
+                        viewModel.forwardToNextSentenceEnd()
+                    },
+                    onAddBookmark: {
+                        quickSaveBookmark()
+                    },
+                    onHoldRewind: {
+                        startHoldStream(forward: false)
+                    },
+                    onHoldForward: {
+                        startHoldStream(forward: true)
+                    },
+                    onHoldRelease: {
+                        stopHoldStream()
+                    }
+                )
+                .padding(.bottom, 52)
+            }
+            .offset(y: isBottomTabActive ? 300 : 0)
+            .opacity(isBottomTabActive ? 0 : (effectivelyHidden ? 0 : 1))
+            .allowsHitTesting(!isBottomTabActive && !effectivelyHidden)
+
+            if viewModel.isCreatingBookmark {
+                bookmarkCreationOverlay
+            }
+        }
+        .overlay(alignment: .bottom) {
+            bottomTabBar
+        }
+    }
+
+    private func currentReadingAreaHeight(
+        geometry: GeometryProxy,
+        isSpritzMode: Bool,
+        effectivelyHidden: Bool
+    ) -> CGFloat {
+        if isBottomTabActive {
+            return geometry.size.height - 50
+        }
+        if isSpritzMode {
+            return geometry.size.height * 0.60
+        }
+        if effectivelyHidden {
+            return geometry.size.height * 0.95
+        }
+        switch appState.settings.dialStyle {
+        case .radial:
+            return geometry.size.height * 0.48
+        case .collapsed:
+            return geometry.size.height * 0.85
         }
     }
 
@@ -299,6 +379,27 @@ struct ReadingView: View {
             systemScheme: colorScheme,
             fontSize: clampedFont
         )
+    }
+
+    /// Pattern to use for the static (non-scrolling) overlay.
+    /// Ruled patterns are rendered inside their own content views for all modes
+    /// (stream, browse, spritz); only use static overlay for non-ruled patterns.
+    private var staticOverlayPattern: ReaderBackgroundPattern {
+        let pattern = resolvedTheme.definition.pattern
+        guard !pattern.hasRuledLines else { return .none }
+        return pattern
+    }
+
+    /// Horizontal padding for the reading area content.
+    /// Browse mode: 0 (ReaderScrollView handles its own padding).
+    /// Stream/spritz mode with ruled lines: 0 (they handle their own padding/background).
+    /// Otherwise: 24pt default.
+    private var streamModePaddingValue: CGFloat {
+        if activeBottomTab == .browse { return 0 }
+        if activeBottomTab == .none && resolvedTheme.definition.pattern.hasRuledLines {
+            return 0
+        }
+        return 24
     }
 
     // MARK: - Bottom Tab Bar
@@ -328,7 +429,7 @@ struct ReadingView: View {
         }) {
             Image(systemName: systemName)
                 .font(.system(size: 22, weight: isActive ? .semibold : .medium))
-                .foregroundColor(isActive ? .primary : .secondary.opacity(0.6))
+                .foregroundColor(isActive ? resolvedTheme.textColor : resolvedTheme.secondaryTextColor.opacity(0.6))
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
         }
@@ -345,9 +446,23 @@ struct ReadingView: View {
                 ProgressView()
                     .scaleEffect(1.5)
 
-                Text("Loading book...")
+                Text(readerCoordinator.loadingOverlayText)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var speedCleanStatusBanner: some View {
+        Group {
+            if let bannerText = speedCleanBannerText {
+                Text(bannerText)
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(resolvedTheme.textColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.top, 16)
             }
         }
     }
@@ -396,28 +511,10 @@ struct ReadingView: View {
         }
     }
 
-    // MARK: - More Menu Button
+    // MARK: - Reader Controls Menu (Left — slider icon)
 
-    private var moreMenuButton: some View {
+    private var readerControlsMenu: some View {
         Menu {
-            Button(action: { showSearch = true }) {
-                Label("Search", systemImage: "magnifyingglass")
-            }
-            Button(action: { showTOC = true }) {
-                Label("Table of Contents", systemImage: "list.bullet")
-            }
-            Button(action: { showThemes = true }) {
-                Label("Themes", systemImage: "paintbrush")
-            }
-
-            if let sourceUrl = itemSourceURL {
-                Link(destination: sourceUrl) {
-                    Label(sourceUrl.host ?? "View Source", systemImage: "safari")
-                }
-            }
-
-            Divider()
-
             Button(action: {
                 withAnimation(.easeOut(duration: 0.2)) {
                     viewModel.readingMode = .spritz
@@ -440,6 +537,64 @@ struct ReadingView: View {
                     if viewModel.readingMode == .stream {
                         Image(systemName: "checkmark")
                     }
+                }
+            }
+
+            if readerCoordinator.speedCleanPackage != nil {
+                Divider()
+
+                Button(action: {
+                    readerCoordinator.revertToOriginal(appState: appState)
+                }) {
+                    HStack {
+                        Text("Original")
+                        if readerCoordinator.activeVariant == nil {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+
+                Button(action: {
+                    readerCoordinator.toggleSpeedClean(appState: appState)
+                }) {
+                    HStack {
+                        Text("Optimized")
+                        if readerCoordinator.activeVariant?.kind == .speedClean {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            Button(action: { showThemes = true }) {
+                Label("Themes", systemImage: "paintbrush")
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundColor(resolvedTheme.secondaryTextColor)
+                .frame(width: 44, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Content Explore Menu (Right — ellipsis icon)
+
+    private var contentExploreMenu: some View {
+        Menu {
+            Button(action: { showSearch = true }) {
+                Label("Search", systemImage: "magnifyingglass")
+            }
+            Button(action: { showTOC = true }) {
+                Label("Table of Contents", systemImage: "list.bullet")
+            }
+
+            if let sourceUrl = itemSourceURL {
+                Link(destination: sourceUrl) {
+                    Label(sourceUrl.host ?? "View Source", systemImage: "safari")
                 }
             }
         } label: {
@@ -516,19 +671,7 @@ struct ReadingView: View {
                     .transition(.opacity)
 
                 case .sparkle:
-                    // Placeholder sparkle view
-                    VStack {
-                        Spacer()
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary.opacity(0.3))
-                        Text("Coming soon")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary.opacity(0.5))
-                            .padding(.top, 8)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
+                    sparklePlaceholderView
                     .transition(.opacity)
 
                 case .bookmarks:
@@ -555,7 +698,7 @@ struct ReadingView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, activeBottomTab == .browse ? 0 : 24)
+            .padding(.horizontal, streamModePaddingValue)
 
             if activeBottomTab == .none, let titleCard = viewModel.activeTitleCard {
                 VStack(spacing: 16) {
@@ -628,6 +771,13 @@ struct ReadingView: View {
     }
 
     private func navigateChapter(direction: Int) {
+        guard let targetChapter = chapterForNavigation(direction: direction) else { return }
+        guard !readerCoordinator.shouldPromptForPolish(targetChapter) else {
+            pendingPolishChapter = targetChapter
+            showPolishDialog = true
+            return
+        }
+
         let screenWidth = UIScreen.main.bounds.width
 
         withAnimation(.easeIn(duration: 0.15)) {
@@ -635,11 +785,7 @@ struct ReadingView: View {
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            if direction > 0 {
-                viewModel.goToNextChapter()
-            } else {
-                viewModel.goToPreviousChapter()
-            }
+            viewModel.goToChapter(targetChapter)
 
             chapterSwipeDragOffset = CGFloat(direction) * screenWidth * 0.6
 
@@ -647,6 +793,23 @@ struct ReadingView: View {
                 chapterSwipeDragOffset = 0
             }
         }
+    }
+
+    private var sparklePlaceholderView: some View {
+        VStack(spacing: 12) {
+            Spacer()
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundColor(resolvedTheme.secondaryTextColor.opacity(0.8))
+
+            Text(".sparkle placeholder view")
+                .font(.headline)
+                .foregroundColor(resolvedTheme.textColor)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Inline Bookmarks View
@@ -810,6 +973,42 @@ struct ReadingView: View {
         tokenSearchResults = results
         searchMatchCount = results.count
         searchCurrentIndex = 0
+    }
+
+    private var speedCleanBannerText: String? {
+        readerCoordinator.speedCleanBannerText
+    }
+
+    private func handleChapterSelection(_ chapter: Chapter) {
+        if readerCoordinator.shouldPromptForPolish(chapter) {
+            pendingPolishChapter = chapter
+            showPolishDialog = true
+            return
+        }
+
+        viewModel.goToChapter(chapter)
+    }
+
+    private func chapterForNavigation(direction: Int) -> Chapter? {
+        guard !viewModel.chapters.isEmpty else { return nil }
+        let currentIndex = viewModel.currentChapterIndex
+
+        if direction > 0 {
+            let nextIndex = currentIndex + 1
+            guard nextIndex < viewModel.chapters.count else { return nil }
+            return viewModel.chapters[nextIndex]
+        }
+
+        if currentIndex >= 0 && currentIndex < viewModel.chapters.count {
+            let currentChapter = viewModel.chapters[currentIndex]
+            if viewModel.currentWordIndex > currentChapter.startWordIndex + 5 {
+                return currentChapter
+            }
+        }
+
+        let previousIndex = currentIndex - 1
+        guard previousIndex >= 0, previousIndex < viewModel.chapters.count else { return nil }
+        return viewModel.chapters[previousIndex]
     }
 
 }

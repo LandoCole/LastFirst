@@ -8,6 +8,11 @@ final class SupabaseManager: @unchecked Sendable {
 
     let client: SupabaseClient?
 
+    var hasAuthenticatedSession: Bool {
+        guard let client, let session = client.auth.currentSession else { return false }
+        return !session.isExpired
+    }
+
     private init() {
         guard let infoDictionary = Bundle.main.infoDictionary,
               let urlString = infoDictionary["SUPABASE_URL"] as? String,
@@ -26,6 +31,40 @@ final class SupabaseManager: @unchecked Sendable {
             supabaseKey: anonKey,
             options: .init(auth: .init(autoRefreshToken: true))
         )
+    }
+
+    private func authenticatedEdgeFunctionsClient(functionName: String) async throws -> SupabaseClient {
+        guard let client else {
+            throw NSError(domain: "SupabaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Supabase client not initialized"])
+        }
+
+        guard client.auth.currentSession != nil else {
+            throw NSError(
+                domain: "SupabaseManager",
+                code: 401,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "The Supabase edge function `\(functionName)` requires a signed-in session. The app is currently running without a Supabase user session, so it will stay on the local fallback path."
+                ]
+            )
+        }
+
+        do {
+            // Always get a fresh session — this triggers token refresh if needed.
+            // The SDK's .session accessor checks expiry internally and refreshes.
+            let session = try await client.auth.session
+            let expiresAt = Date(timeIntervalSince1970: session.expiresAt)
+            let secondsRemaining = expiresAt.timeIntervalSinceNow
+            print("[SupabaseManager] \(functionName): session valid, token expires in \(Int(secondsRemaining))s")
+            return client
+        } catch {
+            throw NSError(
+                domain: "SupabaseManager",
+                code: 401,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "The Supabase edge function `\(functionName)` requires a valid signed-in session. Refreshing the current Supabase session failed, so the request was skipped. Original error: \(error.localizedDescription)"
+                ]
+            )
+        }
     }
 
     // MARK: - Content (replaces Catalog)
@@ -324,16 +363,30 @@ final class SupabaseManager: @unchecked Sendable {
     }
 
     func scrapeURL(url: URL) async throws -> ScrapeResult {
-        guard let client else {
-            throw NSError(domain: "SupabaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Supabase client not initialized"])
-        }
+        let client = try await authenticatedEdgeFunctionsClient(functionName: "scrape-url")
 
         let requestBody = ScrapeRequest(url: url.absoluteString, formats: ["markdown", "html"])
 
-        let result: ScrapeResult = try await client.functions
-            .invoke("scrape-url", options: .init(body: requestBody))
+        do {
+            let result: ScrapeResult = try await client.functions
+                .invoke("scrape-url", options: .init(body: requestBody))
 
-        return result
+            return result
+        } catch {
+            let description = error.localizedDescription
+
+            if description.contains("401") || description.localizedCaseInsensitiveContains("unauthorized") {
+                throw NSError(
+                    domain: "SupabaseManager",
+                    code: 401,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "The Supabase edge function `scrape-url` rejected the request with 401. This usually means the deployed function still requires JWT verification and the current app session is missing or invalid. Sign in and retry, or disable JWT verification for anonymous use. Original error: \(description)"
+                    ]
+                )
+            }
+
+            throw error
+        }
     }
 
     // MARK: - Summarize Content (Edge Function)
@@ -347,6 +400,45 @@ final class SupabaseManager: @unchecked Sendable {
     struct SummarizationResult: Codable {
         let summary: String
         let wordCount: Int
+    }
+
+    struct SpeedCleanSegmentRequest: Codable {
+        let id: String
+        let text: String
+        let structuralKind: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id, text
+            case structuralKind = "structural_kind"
+        }
+    }
+
+    struct SpeedCleanSegmentResult: Codable, Sendable {
+        let segmentID: String
+        let cleanedText: String
+
+        enum CodingKeys: String, CodingKey {
+            case segmentID = "segment_id"
+            case cleanedText = "cleaned_text"
+        }
+    }
+
+    private struct SpeedCleanRequest: Codable {
+        let profile: String
+        let unitID: String
+        let unitTitle: String?
+        let segments: [SpeedCleanSegmentRequest]
+        let model: String?
+
+        enum CodingKeys: String, CodingKey {
+            case profile, segments, model
+            case unitID = "unit_id"
+            case unitTitle = "unit_title"
+        }
+    }
+
+    private struct SpeedCleanResponse: Codable {
+        let segments: [SpeedCleanSegmentResult]
     }
 
     private struct SummarizeRequest: Codable {
@@ -377,6 +469,151 @@ final class SupabaseManager: @unchecked Sendable {
             .invoke("summarize-content", options: .init(body: requestBody))
 
         return result
+    }
+
+    func speedCleanSegments(
+        profile: SpeedCleanProfile,
+        unitID: String,
+        unitTitle: String?,
+        segments: [ContentSegment],
+        model: String? = nil
+    ) async throws -> [SpeedCleanSegmentResult] {
+        let client = try await authenticatedEdgeFunctionsClient(functionName: "speed-clean")
+
+        let requestBody = SpeedCleanRequest(
+            profile: profile.rawValue,
+            unitID: unitID,
+            unitTitle: unitTitle,
+            segments: segments.map {
+                SpeedCleanSegmentRequest(
+                    id: $0.id,
+                    text: $0.text,
+                    structuralKind: $0.structuralKind?.rawValue
+                )
+            },
+            model: model
+        )
+
+        do {
+            let result: SpeedCleanResponse = try await client.functions
+                .invoke("speed-clean", options: .init(body: requestBody))
+
+            return result.segments
+        } catch {
+            let description = error.localizedDescription
+
+            if description.contains("401") || description.localizedCaseInsensitiveContains("unauthorized") {
+                throw NSError(
+                    domain: "SupabaseManager",
+                    code: 401,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "The Supabase edge function `speed-clean` rejected the request with 401. This usually means the deployed function still requires JWT verification and the current app session is missing or invalid. Sign in and retry, or disable JWT verification for anonymous use. Original error: \(description)"
+                    ]
+                )
+            }
+
+            if description.contains("404") || description.localizedCaseInsensitiveContains("not found") {
+                throw NSError(
+                    domain: "SupabaseManager",
+                    code: 404,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "The Supabase edge function `speed-clean` returned 404. The app is reaching your Supabase project, but that function is not deployed there yet. Deploy `supabase/functions/speed-clean` to the active project, then retry. Original error: \(description)"
+                    ]
+                )
+            }
+
+            throw error
+        }
+    }
+
+    // MARK: - Text Transform (Edge Function)
+
+    struct TextTransformSegmentInput: Codable {
+        let id: String
+        let text: String
+    }
+
+    struct TextTransformSegmentResult: Codable, Sendable {
+        let segmentID: String
+        let transformedText: String
+
+        enum CodingKeys: String, CodingKey {
+            case segmentID = "segment_id"
+            case transformedText = "transformed_text"
+        }
+    }
+
+    private struct TextTransformRequest: Codable {
+        let mode: String
+        let conciseness: String?
+        let instructions: String?
+        let unitID: String
+        let unitTitle: String?
+        let segments: [TextTransformSegmentInput]
+        let model: String?
+
+        enum CodingKeys: String, CodingKey {
+            case mode, conciseness, instructions, segments, model
+            case unitID = "unit_id"
+            case unitTitle = "unit_title"
+        }
+    }
+
+    private struct TextTransformResponse: Codable {
+        let segments: [TextTransformSegmentResult]
+    }
+
+    func textTransform(
+        mode: String,
+        conciseness: String?,
+        instructions: String?,
+        unitID: String,
+        unitTitle: String?,
+        segments: [TextTransformSegmentInput],
+        model: String? = nil
+    ) async throws -> [TextTransformSegmentResult] {
+        let client = try await authenticatedEdgeFunctionsClient(functionName: "text-transform")
+
+        let requestBody = TextTransformRequest(
+            mode: mode,
+            conciseness: conciseness,
+            instructions: instructions,
+            unitID: unitID,
+            unitTitle: unitTitle,
+            segments: segments,
+            model: model
+        )
+
+        do {
+            let result: TextTransformResponse = try await client.functions
+                .invoke("text-transform", options: .init(body: requestBody))
+
+            return result.segments
+        } catch {
+            let description = error.localizedDescription
+
+            if description.contains("401") || description.localizedCaseInsensitiveContains("unauthorized") {
+                throw NSError(
+                    domain: "SupabaseManager",
+                    code: 401,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "The Supabase edge function `text-transform` rejected the request with 401. Sign in and retry. Original error: \(description)"
+                    ]
+                )
+            }
+
+            if description.contains("404") || description.localizedCaseInsensitiveContains("not found") {
+                throw NSError(
+                    domain: "SupabaseManager",
+                    code: 404,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "The Supabase edge function `text-transform` returned 404. Deploy `supabase/functions/text-transform` to the active project, then retry. Original error: \(description)"
+                    ]
+                )
+            }
+
+            throw error
+        }
     }
 
     // MARK: - Reading Sessions

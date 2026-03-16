@@ -33,6 +33,10 @@ struct ReadingStatsPageView: View {
             }
             .padding(.bottom, 8)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(.systemBackground))
+        .contentShape(Rectangle())
+        .clipped()
         .task { await statsVM.load() }
     }
 

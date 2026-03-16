@@ -20,6 +20,7 @@ struct HomeView: View {
     @State private var currentDayPage: UUID?
     @State private var currentSectionTitle: String = "Today's Curation"
     @State private var hasScrolledToToday = false
+    @State private var isAnchoringToToday = false
     private let statsPageId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
     // Cover carousel state
@@ -33,38 +34,62 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            if appState.library.isEmpty && (timelineVM?.dayCurations.isEmpty ?? true) {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+
+            if isInitialTimelineLoading {
+                homeLoadingState
+            } else if shouldShowEmptyState {
                 emptyState
             } else {
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        if let vm = timelineVM {
-                            ForEach(vm.dayCurations) { day in
-                                dayCurationSection(day)
-                                    .containerRelativeFrame(.vertical)
+                GeometryReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            if let vm = timelineVM {
+                                if vm.shouldShowGeneratingTodayPage, let pendingTodayId = vm.pendingTodayCurationId {
+                                    generatingTodayPage
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: proxy.size.height)
+                                        .background(Color(.systemBackground))
+                                        .contentShape(Rectangle())
+                                        .clipped()
+                                        .id(pendingTodayId)
+                                }
+
+                                ForEach(vm.dayCurations) { day in
+                                    dayCurationSection(day)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: proxy.size.height)
+                                        .background(Color(.systemBackground))
+                                        .contentShape(Rectangle())
+                                        .clipped()
+                                        .id(day.id)
+                                }
+                            }
+
+                            // Stats page — scrolling down past today reveals this
+                            if shouldShowStatsPage, let statsVM {
+                                ReadingStatsPageView(statsVM: statsVM)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: proxy.size.height)
                                     .background(Color(.systemBackground))
+                                    .contentShape(Rectangle())
                                     .clipped()
-                                    .id(day.id)
+                                    .id(statsPageId)
                             }
                         }
-
-                        // Stats page — scrolling down past today reveals this
-                        if let statsVM {
-                            ReadingStatsPageView(statsVM: statsVM)
-                                .containerRelativeFrame(.vertical)
-                                .background(Color(.systemBackground))
-                                .clipped()
-                                .id(statsPageId)
-                        }
+                        .scrollTargetLayout()
                     }
-                    .scrollTargetLayout()
+                    .scrollTargetBehavior(.paging)
+                    .scrollPosition(id: $currentDayPage)
+                    .background(Color(.systemBackground))
+                    .clipped()
                 }
-                .scrollTargetBehavior(.paging)
-                .scrollPosition(id: $currentDayPage)
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if !(appState.library.isEmpty && (timelineVM?.dayCurations.isEmpty ?? true)) {
+            if !isInitialTimelineLoading,
+               !shouldShowEmptyState {
                 HStack {
                     Button { showAccount = true } label: {
                         accountAvatar
@@ -88,12 +113,22 @@ struct HomeView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .onChange(of: currentDayPage) {
+        .onChange(of: currentDayPage) { _, newValue in
             updateSectionTitle()
+            Task { await loadEarlierIfNeeded(for: newValue) }
         }
-        .onChange(of: scenePhase) {
-            if scenePhase == .active {
-                Task { await statsVM?.load() }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task {
+                    await timelineVM?.load()
+                    await statsVM?.load()
+                    await scrollToToday(force: true)
+                }
+            }
+        }
+        .onChange(of: authVM.currentUser?.id) { _, newUserId in
+            Task {
+                await handleAuthChange(newUserId)
             }
         }
         .task {
@@ -104,30 +139,32 @@ struct HomeView: View {
             if timelineVM == nil, let userId = authVM.currentUser?.id {
                 timelineVM = HomeTimelineViewModel(userId: userId)
             }
-            await statsVM?.load()
             await timelineVM?.load()
-            if !hasScrolledToToday, let todayId = timelineVM?.todayCurationId {
-                hasScrolledToToday = true
-                currentDayPage = todayId
-            }
+            await statsVM?.load()
+            await scrollToToday(force: true)
         }
         .onAppear {
-            Task { await statsVM?.load() }
-        }
-        .onChange(of: timelineVM?.dayCurations.isEmpty) { _, newValue in
-            guard let isEmpty = newValue, !isEmpty,
-                  !hasScrolledToToday,
-                  let todayId = timelineVM?.todayCurationId else { return }
-            hasScrolledToToday = true
-            Task { @MainActor in
-                currentDayPage = todayId
+            Task {
+                if currentDayPage == nil {
+                    await scrollToToday(force: true)
+                }
             }
         }
-        .onChange(of: scrollToTodayTrigger) {
-            if let todayId = timelineVM?.todayCurationId {
-                withAnimation {
-                    currentDayPage = todayId
-                }
+        .onChange(of: timelinePageIDs) { _, newValue in
+            guard !newValue.isEmpty else { return }
+            let currentPageStillExists = currentDayPage.map(newValue.contains) ?? false
+            let shouldReanchor = currentDayPage == nil
+                || !hasScrolledToToday
+                || !currentPageStillExists
+                || currentDayPage != timelineVM?.todayCurationId
+            guard shouldReanchor else { return }
+            Task {
+                await scrollToToday(force: true)
+            }
+        }
+        .onChange(of: scrollToTodayTrigger) { _, _ in
+            Task {
+                await scrollToToday(animated: true, force: true)
             }
         }
         .sheet(isPresented: $showAccount) {
@@ -217,9 +254,14 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .clipped()
         .onAppear {
             // Load earlier pages when first page appears
-            if let vm = timelineVM, day.id == vm.dayCurations.first?.id {
+            if let vm = timelineVM,
+               hasScrolledToToday,
+               currentDayPage == day.id,
+               day.id == vm.earliestLoadedDayId {
                 Task { await vm.loadEarlier() }
             }
         }
@@ -345,7 +387,7 @@ struct HomeView: View {
 
     private func updateSectionTitle() {
         guard let vm = timelineVM, let pageId = currentDayPage else {
-            currentSectionTitle = "Today's Curation"
+            currentSectionTitle = shouldShowStatsPage && !hasHomeTimelineContent ? "Reading Stats" : "Today's Curation"
             return
         }
 
@@ -431,6 +473,143 @@ struct HomeView: View {
         }
     }
 
+    private var shouldShowGeneratingTodayPage: Bool {
+        timelineVM?.shouldShowGeneratingTodayPage ?? false
+    }
+
+    private var hasHomeTimelineContent: Bool {
+        shouldShowGeneratingTodayPage || !(timelineVM?.dayCurations.isEmpty ?? true)
+    }
+
+    private var shouldShowEmptyState: Bool {
+        appState.library.isEmpty && !hasHomeTimelineContent
+    }
+
+    private var timelinePageIDs: [UUID] {
+        var ids = timelineVM?.dayCurations.map(\.id) ?? []
+        if shouldShowGeneratingTodayPage, let pendingTodayId = timelineVM?.pendingTodayCurationId {
+            ids.append(pendingTodayId)
+        }
+        return ids
+    }
+
+    private var isInitialTimelineLoading: Bool {
+        guard authVM.currentUser != nil else { return false }
+        guard let vm = timelineVM else { return true }
+        return !vm.hasResolvedInitialTimeline && vm.dayCurations.isEmpty && !vm.shouldShowGeneratingTodayPage
+    }
+
+    private var shouldShowStatsPage: Bool {
+        guard statsVM != nil else { return false }
+        if authVM.currentUser == nil {
+            return !appState.library.isEmpty
+        }
+        guard let vm = timelineVM else { return false }
+        return hasHomeTimelineContent || vm.hasResolvedInitialTimeline
+    }
+
+    private func loadEarlierIfNeeded(for pageId: UUID?) async {
+        guard let pageId,
+              let vm = timelineVM,
+              pageId == vm.earliestLoadedDayId else { return }
+        await vm.loadEarlier()
+    }
+
+    private func handleAuthChange(_ newUserId: UUID?) async {
+        statsVM = ReadingStatsViewModel(
+            modelContext: modelContext,
+            appState: appState,
+            userId: newUserId?.uuidString ?? "local"
+        )
+        await statsVM?.load()
+        hasScrolledToToday = false
+        currentDayPage = nil
+
+        if let newUserId {
+            timelineVM = HomeTimelineViewModel(userId: newUserId)
+            await timelineVM?.load()
+            await scrollToToday(force: true)
+        } else {
+            timelineVM = nil
+            await anchorToStatsPageIfNeeded(force: true)
+        }
+    }
+
+    private func scrollToToday(animated: Bool = false, force: Bool = false) async {
+        guard let vm = timelineVM else {
+            await anchorToStatsPageIfNeeded(animated: animated, force: force)
+            return
+        }
+        guard let todayId = vm.todayCurationId else {
+            await anchorToStatsPageIfNeeded(animated: animated, force: force)
+            return
+        }
+        guard vm.dayCurations.contains(where: { $0.id == todayId }) || vm.pendingTodayCurationId == todayId else {
+            await anchorToStatsPageIfNeeded(animated: animated, force: force)
+            return
+        }
+        guard force || !hasScrolledToToday || currentDayPage != todayId else { return }
+        guard !isAnchoringToToday else { return }
+
+        await MainActor.run {
+            isAnchoringToToday = true
+        }
+        defer {
+            Task { @MainActor in
+                isAnchoringToToday = false
+            }
+        }
+
+        for attempt in 0..<3 {
+            await MainActor.run {
+                if animated && attempt == 0 {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        currentDayPage = todayId
+                    }
+                } else {
+                    currentDayPage = todayId
+                }
+                hasScrolledToToday = true
+                updateSectionTitle()
+            }
+
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: 80_000_000)
+            }
+        }
+    }
+
+    private func anchorToStatsPageIfNeeded(animated: Bool = false, force: Bool = false) async {
+        guard shouldShowStatsPage, !hasHomeTimelineContent else { return }
+        guard force || currentDayPage != statsPageId else { return }
+        await MainActor.run {
+            isAnchoringToToday = true
+        }
+        defer {
+            Task { @MainActor in
+                isAnchoringToToday = false
+            }
+        }
+
+        for attempt in 0..<3 {
+            await MainActor.run {
+                if animated && attempt == 0 {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        currentDayPage = statsPageId
+                    }
+                } else {
+                    currentDayPage = statsPageId
+                }
+                hasScrolledToToday = false
+                updateSectionTitle()
+            }
+
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: 80_000_000)
+            }
+        }
+    }
+
     // MARK: - Account Avatar
 
     private var userInitials: String {
@@ -454,6 +633,31 @@ struct HomeView: View {
             }
             .nativeGlassButton(shape: .circle)
             .conditionalGlassEffectID("accountAvatar", in: homeGlassNamespace)
+    }
+
+    private var homeLoadingState: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.1)
+            Text("Loading today’s curation…")
+                .font(.rethinkSans(15))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var generatingTodayPage: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "sparkles")
+                .font(.system(size: 20))
+                .foregroundStyle(.secondary.opacity(0.6))
+            Text("Your daily curation is being prepared...")
+                .font(.rethinkSans(14))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Empty State

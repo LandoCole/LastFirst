@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		0095E13C14421EC25A6B23DB /* DotMatrixView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F64CAD2D624CFE59EA8898 /* DotMatrixView.swift */; };
+		0E1A2B3C4D5E6F7A8B9C0D1F /* ThemePatternOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E1A2B3C4D5E6F7A8B9C0D1E /* ThemePatternOverlay.swift */; };
+		0E2B3C4D5E6F7A8B9C0D1E2F /* RuledLinesBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2B3C4D5E6F7A8B9C0D1E2E /* RuledLinesBackground.swift */; };
 		08D4E5F6172839405B6C7D8E /* SummarizationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C3D4E5061728394A5B6C7D /* SummarizationViewModel.swift */; };
 		0A7AD5E804E454FEBBC8885A /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85F947CF50A07FC486E5D83 /* SplashView.swift */; };
 		0D1099546DDB3184BB29CB67 /* DailyCurationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCD25C6D4714309B449E1FD6 /* DailyCurationViewModel.swift */; };
@@ -87,6 +89,8 @@
 		D2C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift */; };
 		D2F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift */; };
 		D2F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift */; };
+		E8A100000000000000000001 /* SpeedCleanStoreActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A100000000000000000002 /* SpeedCleanStoreActor.swift */; };
+		E8A100000000000000000003 /* SpeedCleanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A100000000000000000004 /* SpeedCleanService.swift */; };
 		D3000001 /* ReaderTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3100001 /* ReaderTheme.swift */; };
 		D3000002 /* ThemesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3100002 /* ThemesSettingsView.swift */; };
 		D3605C7DC4CF3FDFD031D628 /* CatalogPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980C8E61353C203694132FEF /* CatalogPreviewSheet.swift */; };
@@ -94,7 +98,6 @@
 		D3C273632F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3C2735F2F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf */; };
 		D3C273642F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3C273602F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf */; };
 		D4E5F60718293A4B5C6D7E8F /* CurationCreationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F607182939405B6C7E /* CurationCreationViewModel.swift */; };
-		D5000001 /* LiquidGlassTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4000001 /* LiquidGlassTestView.swift */; };
 		D5000002 /* LiquidGlassSpeedDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4000002 /* LiquidGlassSpeedDial.swift */; };
 		D5000003 /* RotaryDialGesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4000003 /* RotaryDialGesture.swift */; };
 		D6882B035374E011F7B7212E /* ReadingMetricsTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C51A56B15550EF357661B0 /* ReadingMetricsTracker.swift */; };
@@ -113,9 +116,16 @@
 		F565B2523D63F395807FF79A /* TOCSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 209CD3A36DF73BF4A7605DDB /* TOCSheetView.swift */; };
 		F7000001 /* Fonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000001 /* Fonts.swift */; };
 		F7000002 /* SignupEmailConfirmationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8000002 /* SignupEmailConfirmationView.swift */; };
+		F9B200000000000000000001 /* TextVariant.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A200000000000000000001 /* TextVariant.swift */; };
+		F9B200000000000000000002 /* TextVariantStoreActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A200000000000000000002 /* TextVariantStoreActor.swift */; };
+		F9B200000000000000000003 /* TextVariantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A200000000000000000003 /* TextVariantService.swift */; };
+		F9B200000000000000000004 /* AIMenuViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A200000000000000000004 /* AIMenuViewModel.swift */; };
+		F9B200000000000000000005 /* AIMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A200000000000000000005 /* AIMenuView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0E1A2B3C4D5E6F7A8B9C0D1E /* ThemePatternOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePatternOverlay.swift; sourceTree = "<group>"; };
+		0E2B3C4D5E6F7A8B9C0D1E2E /* RuledLinesBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuledLinesBackground.swift; sourceTree = "<group>"; };
 		0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogItem.swift; sourceTree = "<group>"; };
 		1770FFEA952EB923C58DCA25 /* CurationCardStack.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationCardStack.swift; sourceTree = "<group>"; };
 		195ED0AA5E4C7E3A61E8778F /* ContentItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentItem.swift; sourceTree = "<group>"; };
@@ -191,12 +201,13 @@
 		D1C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParsingCoordinatorActor.swift; sourceTree = "<group>"; };
 		D1F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CanonicalParsingService.swift; sourceTree = "<group>"; };
 		D1F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CanonicalDocumentAdapter.swift; sourceTree = "<group>"; };
+		E8A100000000000000000002 /* SpeedCleanStoreActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpeedCleanStoreActor.swift; sourceTree = "<group>"; };
+		E8A100000000000000000004 /* SpeedCleanService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpeedCleanService.swift; sourceTree = "<group>"; };
 		D3100001 /* ReaderTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReaderTheme.swift; sourceTree = "<group>"; };
 		D3100002 /* ThemesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemesSettingsView.swift; sourceTree = "<group>"; };
 		D3C2735E2F43CE4600704D02 /* RethinkSans-VariableFont.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "RethinkSans-VariableFont.ttf"; sourceTree = "<group>"; };
 		D3C2735F2F43CE4600704D02 /* RethinkSans-Italic-VariableFont.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "RethinkSans-Italic-VariableFont.ttf"; sourceTree = "<group>"; };
 		D3C273602F43CE4600704D02 /* HedvigLettersSerif-VariableFont.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "HedvigLettersSerif-VariableFont.ttf"; sourceTree = "<group>"; };
-		D4000001 /* LiquidGlassTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassTestView.swift; sourceTree = "<group>"; };
 		D4000002 /* LiquidGlassSpeedDial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassSpeedDial.swift; sourceTree = "<group>"; };
 		D4000003 /* RotaryDialGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RotaryDialGesture.swift; sourceTree = "<group>"; };
 		D5A1B2C3E4F506718293A4B5 /* SummarizationSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SummarizationSheet.swift; sourceTree = "<group>"; };
@@ -221,6 +232,11 @@
 		FB31C9E400CC3B074C04CC4E /* ReadingSessionDTO.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingSessionDTO.swift; sourceTree = "<group>"; };
 		FCA827DF40620834DD1744F2 /* ReadingSessionRecord.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingSessionRecord.swift; sourceTree = "<group>"; };
 		FF09000000000009 /* CurationPreviewSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationPreviewSheet.swift; sourceTree = "<group>"; };
+		F9A200000000000000000001 /* TextVariant.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextVariant.swift; sourceTree = "<group>"; };
+		F9A200000000000000000002 /* TextVariantStoreActor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextVariantStoreActor.swift; sourceTree = "<group>"; };
+		F9A200000000000000000003 /* TextVariantService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextVariantService.swift; sourceTree = "<group>"; };
+		F9A200000000000000000004 /* AIMenuViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIMenuViewModel.swift; sourceTree = "<group>"; };
+		F9A200000000000000000005 /* AIMenuView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIMenuView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -285,7 +301,6 @@
 				A2000007 /* ImagesView.swift */,
 				D3100002 /* ThemesSettingsView.swift */,
 				A2000025 /* ArtifactsView.swift */,
-				D4000001 /* LiquidGlassTestView.swift */,
 				209CD3A36DF73BF4A7605DDB /* TOCSheetView.swift */,
 				97B1B9D9605C603338C590B7 /* BookmarksView.swift */,
 				9425245464C7B7CA96550A1D /* HomeView.swift */,
@@ -309,6 +324,7 @@
 				A1B2C3D4E5F60718293A4B5C /* CreateCurationSheet.swift */,
 				CC02ADD000000002 /* AddContentSheet.swift */,
 				FF09000000000009 /* CurationPreviewSheet.swift */,
+				F9A200000000000000000005 /* AIMenuView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -327,6 +343,7 @@
 				F7C3D4E5061728394A5B6C7D /* SummarizationViewModel.swift */,
 				C3D4E5F607182939405B6C7E /* CurationCreationViewModel.swift */,
 				AA02000000000002 /* HomeTimelineViewModel.swift */,
+				F9A200000000000000000004 /* AIMenuViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -349,6 +366,7 @@
 				FB31C9E400CC3B074C04CC4E /* ReadingSessionDTO.swift */,
 				CA01F2A3B4C5D6E7F8091A01 /* ReadingList.swift */,
 				AA01000000000001 /* CurationFilter.swift */,
+				F9A200000000000000000001 /* TextVariant.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -356,6 +374,8 @@
 		A4000005 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				0E1A2B3C4D5E6F7A8B9C0D1E /* ThemePatternOverlay.swift */,
+				0E2B3C4D5E6F7A8B9C0D1E2E /* RuledLinesBackground.swift */,
 				A2000009 /* SpritzModeView.swift */,
 				A2000010 /* StreamModeView.swift */,
 				A2000021 /* ReaderScrollView.swift */,
@@ -386,10 +406,12 @@
 				B2000005 /* PDFOCRTextExtractor.swift */,
 				78CD274DC01D6AC981558AE8 /* ImageStorageManager.swift */,
 				D1A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift */,
+				E8A100000000000000000002 /* SpeedCleanStoreActor.swift */,
 				D1B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift */,
 				D1C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift */,
 				D1F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift */,
 				D1F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift */,
+				E8A100000000000000000004 /* SpeedCleanService.swift */,
 				8F670EBB6E8B4C4F9A379B87 /* EPUBStructuralParser.swift */,
 				F1551CE79D8650FF66AD58E0 /* EPUBMetadataExtractor.swift */,
 				BDA7F1AAE88E64C7D37119FD /* FullTextSearchService.swift */,
@@ -397,6 +419,8 @@
 				38C51A56B15550EF357661B0 /* ReadingMetricsTracker.swift */,
 				D9DC6D992EF31B637ED9502C /* ReadingMetricsSyncService.swift */,
 				DD08000000000008 /* CurationCardColorCache.swift */,
+				F9A200000000000000000002 /* TextVariantStoreActor.swift */,
+				F9A200000000000000000003 /* TextVariantService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -539,6 +563,8 @@
 				B1000002 /* LibraryItem.swift in Sources */,
 				B1000001 /* ReaderDocument.swift in Sources */,
 				D3000001 /* ReaderTheme.swift in Sources */,
+				0E1A2B3C4D5E6F7A8B9C0D1F /* ThemePatternOverlay.swift in Sources */,
+				0E2B3C4D5E6F7A8B9C0D1E2F /* RuledLinesBackground.swift in Sources */,
 				A1000013 /* Settings.swift in Sources */,
 				A1000014 /* Bookmark.swift in Sources */,
 				A1000015 /* AppState.swift in Sources */,
@@ -554,10 +580,11 @@
 				D2F2A3B4C5D6E7F8091A2B3C /* CanonicalDocumentAdapter.swift in Sources */,
 				7FF3D9EBCAC2E70B2636F1C1 /* ImageStorageManager.swift in Sources */,
 				D2A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift in Sources */,
+				E8A100000000000000000001 /* SpeedCleanStoreActor.swift in Sources */,
 				D2B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift in Sources */,
 				D2C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift in Sources */,
 				D2F1A2B3C4D5061728394A5F /* CanonicalParsingService.swift in Sources */,
-				D5000001 /* LiquidGlassTestView.swift in Sources */,
+				E8A100000000000000000003 /* SpeedCleanService.swift in Sources */,
 				D5000002 /* LiquidGlassSpeedDial.swift in Sources */,
 				D5000003 /* RotaryDialGesture.swift in Sources */,
 				3DB8FB2FEBFDABA71D81AECB /* LiquidGlassStyle.swift in Sources */,
@@ -627,6 +654,11 @@
 				BB06000000000006 /* CurationFilterBar.swift in Sources */,
 				EE09000000000009 /* CurationPreviewSheet.swift in Sources */,
 				CC08000000000008 /* CurationCardColorCache.swift in Sources */,
+				F9B200000000000000000001 /* TextVariant.swift in Sources */,
+				F9B200000000000000000002 /* TextVariantStoreActor.swift in Sources */,
+				F9B200000000000000000003 /* TextVariantService.swift in Sources */,
+				F9B200000000000000000004 /* AIMenuViewModel.swift in Sources */,
+				F9B200000000000000000005 /* AIMenuView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

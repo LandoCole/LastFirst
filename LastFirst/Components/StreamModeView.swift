@@ -6,15 +6,30 @@ struct StreamModeView: View {
     let screenWidth: CGFloat
     let availableHeight: CGFloat
 
+    private static let interLineSpacing: CGFloat = 4
+
+    private var leftPadding: CGFloat {
+        theme.definition.pattern.hasFixedLeftMargin
+            ? ReaderBackgroundPattern.legalMarginX
+            : CGFloat(theme.definition.margin)
+    }
+    private var rightPadding: CGFloat { CGFloat(theme.definition.margin) }
+
+    private var lineHeight: CGFloat {
+        theme.fontSize * CGFloat(theme.definition.lineSpacing)
+    }
+
     var body: some View {
         let streamData = viewModel.getStreamLines(
             screenWidth: screenWidth,
             fontSize: theme.fontSize,
-            availableHeight: availableHeight
+            availableHeight: availableHeight,
+            horizontalPadding: leftPadding + rightPadding,
+            lineSpacing: CGFloat(theme.definition.lineSpacing)
         )
 
         GeometryReader { geometry in
-            VStack(spacing: 4) {
+            VStack(spacing: Self.interLineSpacing) {
                 ForEach(Array(streamData.lines.enumerated()), id: \.offset) { lineIndex, line in
                     let isCurrentLine = lineIndex == streamData.currentLineIndex
                     let opacity = calculateOpacity(
@@ -28,7 +43,7 @@ struct StreamModeView: View {
                         if isCurrentLine {
                             if line.isBlank {
                                 Color.clear
-                                    .frame(height: theme.fontSize * 0.9)
+                                    .frame(height: theme.definition.pattern.hasRuledLines ? lineHeight : theme.fontSize * 0.9)
                             } else {
                                 let fontDesign = lineDesign(for: line)
                                 let fontWeight = lineWeight(for: line)
@@ -48,7 +63,7 @@ struct StreamModeView: View {
                             // Lines above current: show all words
                             if line.isBlank {
                                 Color.clear
-                                    .frame(height: theme.fontSize * 0.9)
+                                    .frame(height: theme.definition.pattern.hasRuledLines ? lineHeight : theme.fontSize * 0.9)
                             } else {
                                 streamLineContent(line: line, opacity: opacity)
                             }
@@ -56,10 +71,25 @@ struct StreamModeView: View {
                         // Lines below current: don't show yet
                         Spacer()
                     }
-                    .frame(height: theme.fontSize * 1.4)
+                    .frame(height: lineHeight)
                 }
             }
+            .padding(.leading, leftPadding)
+            .padding(.trailing, rightPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if theme.definition.pattern.hasRuledLines {
+                    RuledLinesBackground(
+                        pattern: theme.definition.pattern,
+                        variant: theme.variant,
+                        linePitch: theme.ruledLinePitch(interLineSpacing: Self.interLineSpacing),
+                        topOffset: lineHeight / 2 + theme.fontSize * 0.3,
+                        marginX: theme.definition.pattern.hasFixedLeftMargin ? ReaderBackgroundPattern.legalMarginX : nil,
+                        contentHeight: availableHeight,
+                        bottomFadeHeight: 60
+                    )
+                }
+            }
             .animation(.easeOut(duration: 0.1), value: viewModel.currentWordIndex)
         }
         .onAppear {

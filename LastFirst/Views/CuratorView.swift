@@ -24,7 +24,7 @@ struct CuratorView: View {
         "Reading is to the mind what exercise is to the body\n—Joseph Addison"
     ]
 
-    init(inputText: Binding<String>, userId: UUID = UUID()) {
+    init(inputText: Binding<String>, userId: UUID) {
         self._inputText = inputText
         self._viewModel = StateObject(wrappedValue: CuratorViewModel(userId: userId))
     }
@@ -87,9 +87,10 @@ struct CuratorView: View {
                     appState.addCuratedItem(curationItem)
                     Task {
                         try? await SupabaseManager.shared.markCurationItemSaved(itemId: curationItem.id)
-                        if let contentId = curationItem.contentId {
+                        if let contentId = curationItem.contentId,
+                           let userId = authVM.currentUser?.id {
                             try? await SupabaseManager.shared.postInteraction(
-                                userId: authVM.currentUser?.id ?? UUID(),
+                                userId: userId,
                                 contentId: contentId,
                                 kind: "bookmark"
                             )

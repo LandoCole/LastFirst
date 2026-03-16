@@ -7,16 +7,18 @@ struct CuratorPlanView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack(spacing: 6) {
-                Image(systemName: "list.clipboard")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(gold)
-                Text("Research Plan")
-                    .font(.rethinkSans(12, weight: .semibold))
-                    .foregroundStyle(.secondary)
+            // Header + Steps (only when steps exist)
+            if !plan.steps.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "list.clipboard")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(gold)
+                    Text("Research Plan")
+                        .font(.rethinkSans(12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 10)
             }
-            .padding(.bottom, 10)
 
             // Steps
             ForEach(Array(plan.steps.enumerated()), id: \.element.id) { index, step in

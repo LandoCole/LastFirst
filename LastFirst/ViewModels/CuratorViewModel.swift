@@ -116,7 +116,19 @@ class CuratorViewModel: ObservableObject {
     // MARK: - Poll Until Ready (Multi-Agent)
 
     private func pollUntilReady(curationId: UUID) async {
+        let maxPollDuration: TimeInterval = 300 // 5 minute timeout
+        let startTime = Date()
+
         while !Task.isCancelled {
+            // Timeout guard
+            if Date().timeIntervalSince(startTime) > maxPollDuration {
+                error = "Research timed out. Please try again."
+                isLoading = false
+                statusMessage = nil
+                stopActivityPolling()
+                return
+            }
+
             // Poll tool messages for progress (existing)
             await pollActivities()
 

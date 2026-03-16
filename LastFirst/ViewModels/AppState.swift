@@ -138,6 +138,7 @@ class AppState: ObservableObject {
         Task {
             try? await DocumentStoreActor.shared.delete(documentId: item.documentId)
             try? await ResourceCacheActor.shared.delete(documentId: item.documentId)
+            try? await SpeedCleanStoreActor.shared.delete(documentId: item.documentId)
         }
         
         // Delete the local file itself (web items have no local file)
