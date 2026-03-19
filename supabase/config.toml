@@ -2,7 +2,7 @@
 verify_jwt = false
 
 [functions.curator-chat]
-verify_jwt = true
+verify_jwt = false
 
 [functions.curator-daily]
 verify_jwt = true
