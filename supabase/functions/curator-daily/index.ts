@@ -61,13 +61,12 @@ function getAgentServiceConfig(): { url: string; internalKey: string } | null {
   };
 }
 
-async function invokeExternalDailyCurator(req: Request): Promise<Response | null> {
+async function invokeExternalDailyCurator(body: Record<string, unknown>): Promise<Response | null> {
   const config = getAgentServiceConfig();
   if (!config) {
     return null;
   }
 
-  const body = await req.json().catch(() => ({}));
   const response = await fetch(`${config.url}/internal/daily-curations/run`, {
     method: "POST",
     headers: {
@@ -106,7 +105,10 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const delegatedResponse = await invokeExternalDailyCurator(req);
+  // Parse body once so it's available for both delegation and inline fallback
+  const body = await req.json().catch(() => ({}));
+
+  const delegatedResponse = await invokeExternalDailyCurator(body);
   if (delegatedResponse) {
     return delegatedResponse;
   }

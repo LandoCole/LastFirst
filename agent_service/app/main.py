@@ -4,6 +4,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 
 from app.config import Settings, get_settings
 from app.models import (
+    CuratorChatRequest,
+    CuratorChatResponse,
     DailyRunRequest,
     DailyRunResponse,
     VaultImportRequest,
@@ -12,6 +14,7 @@ from app.models import (
     VaultProvisionResponse,
 )
 from app.services.anthropic_client import AnthropicService
+from app.services.curator_chat import CuratorChatService
 from app.services.daily_curator import DailyCuratorService
 from app.services.embeddings import EmbeddingService
 from app.services.firecrawl import FirecrawlService
@@ -49,6 +52,25 @@ def get_daily_curator(settings: Settings = Depends(get_settings)) -> DailyCurato
     )
 
 
+def get_curator_chat(settings: Settings = Depends(get_settings)) -> CuratorChatService:
+    repository = SupabaseRepository(settings.supabase_url, settings.supabase_service_role_key)
+    anthropic = AnthropicService(settings.anthropic_api_key)
+    firecrawl = FirecrawlService(settings.firecrawl_api_key)
+    embedding_service = EmbeddingService(settings.openai_api_key, settings.embedding_model)
+    semantic_vault = SemanticVaultService(
+        repository=repository,
+        embedding_service=embedding_service,
+        candidate_limit=settings.semantic_search_candidate_limit,
+    )
+    return CuratorChatService(
+        repository=repository,
+        anthropic=anthropic,
+        firecrawl=firecrawl,
+        semantic_vault=semantic_vault,
+        settings=settings,
+    )
+
+
 def get_vault_service(settings: Settings = Depends(get_settings)) -> VaultService:
     repository = SupabaseRepository(settings.supabase_url, settings.supabase_service_role_key)
     embedding_service = EmbeddingService(settings.openai_api_key, settings.embedding_model)
@@ -66,6 +88,14 @@ async def run_daily_curations(
     curator: DailyCuratorService = Depends(get_daily_curator),
 ) -> DailyRunResponse:
     return await curator.run(request)
+
+
+@app.post("/internal/curator-chat", response_model=CuratorChatResponse, dependencies=[Depends(require_internal_key)])
+async def curator_chat(
+    request: CuratorChatRequest,
+    chat_service: CuratorChatService = Depends(get_curator_chat),
+) -> CuratorChatResponse:
+    return await chat_service.handle(request)
 
 
 @app.post("/internal/vaults/provision", response_model=VaultProvisionResponse, dependencies=[Depends(require_internal_key)])

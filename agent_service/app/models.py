@@ -92,3 +92,32 @@ class Finding(BaseModel):
     url: str | None = None
     author: str | None = None
     summary: str | None = None
+
+
+# --- Curator Chat Models ---
+
+
+class CuratorChatRequest(BaseModel):
+    curation_id: str | None = None
+    message: str
+    user_id: str | None = None
+    model: str | None = None
+
+
+class CuratorChatResponse(BaseModel):
+    curation_id: str
+    response: str | None = None
+    items_added: int | None = None
+    complexity: str | None = None
+    agent_count: int | None = None
+
+
+class ClassificationResult(BaseModel):
+    complexity: str = "simple"
+    subqueries: list[dict[str, str]] = Field(default_factory=list)
+    reasoning: str = ""
+
+
+class SubagentResult(BaseModel):
+    findings: list[Finding] = Field(default_factory=list)
+    tokens_used: int = 0

@@ -48,6 +48,61 @@ class HttpError extends Error {
   }
 }
 
+// --- External Agent Service Delegation ---
+
+function getAgentServiceConfig(): { url: string; internalKey: string } | null {
+  const url = Deno.env.get("AGENT_SERVICE_URL");
+  const internalKey = Deno.env.get("AGENT_SERVICE_INTERNAL_KEY");
+  if (!url || !internalKey) {
+    return null;
+  }
+  return { url: url.replace(/\/$/, ""), internalKey };
+}
+
+async function invokeExternalCuratorChat(
+  req: Request,
+  body: CuratorRequest,
+  userId: string
+): Promise<Response | null> {
+  const config = getAgentServiceConfig();
+  if (!config) {
+    return null;
+  }
+
+  const payload = { ...body, user_id: userId };
+  const response = await fetch(`${config.url}/internal/curator-chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Agent-Service-Key": config.internalKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    console.error("External curator-chat error:", response.status, responseText);
+    return new Response(
+      JSON.stringify({ error: "External curator-chat failed", details: responseText }),
+      {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  let result: Record<string, unknown>;
+  try {
+    result = JSON.parse(responseText) as Record<string, unknown>;
+  } catch {
+    result = { raw: responseText };
+  }
+
+  return new Response(JSON.stringify(result), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 function createRequestScopedSupabaseClient(req: Request): SupabaseClient {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -155,6 +210,16 @@ serve(async (req: Request) => {
 
     if (body.user_id && body.user_id !== authenticatedUserId) {
       throw new HttpError(403, "Authenticated user does not match the curator request");
+    }
+
+    // Delegate to Railway agent service if configured
+    const delegatedResponse = await invokeExternalCuratorChat(
+      req,
+      { ...body, message },
+      authenticatedUserId
+    );
+    if (delegatedResponse) {
+      return delegatedResponse;
     }
 
     const request: CuratorRequest = {

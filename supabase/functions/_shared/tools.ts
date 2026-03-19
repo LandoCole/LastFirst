@@ -169,13 +169,25 @@ export async function executeTool(
   }
 }
 
+// --- Helpers ---
+
+function sanitizePostgrestValue(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/\./g, "\\.")
+    .replace(/,/g, "\\,")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
 // --- Tool Implementations ---
 
 async function searchContent(
   supabase: SupabaseClient,
   input: Record<string, unknown>
 ): Promise<string> {
-  const query = String(input.query ?? "");
+  const query = sanitizePostgrestValue(String(input.query ?? ""));
   const limit = Number(input.limit ?? 10);
 
   const { data, error } = await supabase

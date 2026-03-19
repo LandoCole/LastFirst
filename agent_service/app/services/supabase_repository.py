@@ -203,12 +203,13 @@ class SupabaseRepository:
         if not cleaned_query:
             return {"results": [], "count": 0}
 
+        safe_query = self._sanitize_postgrest_value(cleaned_query)
         response = (
             self._client.table("vault_notes")
             .select("id, path, title, note_type, tags, updated_at, content_markdown")
             .eq("vault_id", vault["id"])
             .or_(
-                f"title.ilike.%{cleaned_query}%,path.ilike.%{cleaned_query}%,content_markdown.ilike.%{cleaned_query}%"
+                f"title.ilike.%{safe_query}%,path.ilike.%{safe_query}%,content_markdown.ilike.%{safe_query}%"
             )
             .limit(limit)
             .execute()
@@ -433,11 +434,105 @@ class SupabaseRepository:
             {"last_generated_at": datetime.now(UTC).isoformat()}
         ).eq("id", config_id).execute()
 
+    # --- Curator Chat Methods ---
+
+    def get_curation(self, curation_id: str) -> dict[str, Any] | None:
+        response = (
+            self._client.table("curations")
+            .select("id, user_id, status, type")
+            .eq("id", curation_id)
+            .limit(1)
+            .execute()
+        )
+        rows = response.data or []
+        return rows[0] if rows else None
+
+    def create_user_curation(self, user_id: str, message: str) -> str:
+        response = (
+            self._client.table("curations")
+            .insert({
+                "user_id": user_id,
+                "type": "user_directed",
+                "title": message[:100],
+                "prompt": message,
+                "status": "researching",
+            })
+            .select("id")
+            .single()
+            .execute()
+        )
+        return response.data["id"]
+
+    def get_conversation_history(self, curation_id: str) -> list[dict[str, str]]:
+        response = (
+            self._client.table("curation_messages")
+            .select("role, content")
+            .eq("curation_id", curation_id)
+            .in_("role", ["user", "assistant"])
+            .order("created_at")
+            .execute()
+        )
+        return [{"role": m["role"], "content": m["content"]} for m in (response.data or [])]
+
+    def create_agent_task(self, curation_id: str, role: str, query: str) -> str:
+        response = (
+            self._client.table("agent_tasks")
+            .insert({
+                "curation_id": curation_id,
+                "agent_role": role,
+                "query": query,
+                "status": "running",
+                "started_at": datetime.now(UTC).isoformat(),
+            })
+            .select("id")
+            .single()
+            .execute()
+        )
+        return response.data["id"]
+
+    def complete_agent_task(
+        self,
+        task_id: str,
+        status: str,
+        *,
+        findings: list[dict[str, Any]] | None = None,
+        tokens_used: int = 0,
+        error_message: str | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "status": status,
+            "completed_at": datetime.now(UTC).isoformat(),
+            "tokens_used": tokens_used,
+        }
+        if findings is not None:
+            payload["findings"] = findings
+        if error_message:
+            payload["error_message"] = error_message
+        self._client.table("agent_tasks").update(payload).eq("id", task_id).execute()
+
+    def get_curation_item_count(self, curation_id: str) -> int:
+        response = (
+            self._client.table("curation_items")
+            .select("id", count="exact")
+            .eq("curation_id", curation_id)
+            .execute()
+        )
+        return response.count or 0
+
+    def insert_single_curation_item(self, item: dict[str, Any]) -> None:
+        self._client.table("curation_items").insert(item).execute()
+
+    @staticmethod
+    def _sanitize_postgrest_value(value: str) -> str:
+        """Escape characters that have special meaning in PostgREST filter syntax."""
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace(".", "\\.").replace(",", "\\,").replace("(", "\\(").replace(")", "\\)")
+
     def search_content(self, query: str, limit: int = 10) -> dict[str, Any]:
+        safe_query = self._sanitize_postgrest_value(query)
         response = (
             self._client.table("content")
             .select("id, title, author, summary, file_type, is_available")
-            .or_(f"title.ilike.%{query}%,author.ilike.%{query}%,summary.ilike.%{query}%")
+            .or_(f"title.ilike.%{safe_query}%,author.ilike.%{safe_query}%,summary.ilike.%{safe_query}%")
             .eq("is_available", True)
             .limit(limit)
             .execute()
