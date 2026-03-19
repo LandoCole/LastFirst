@@ -66,8 +66,7 @@ class CuratorViewModel: ObservableObject {
             let response = try await SupabaseManager.shared.sendCuratorMessage(
                 curationId: activeCurationId,
                 message: trimmed,
-                userId: userId,
-                model: model.rawValue.lowercased()
+                model: model.apiValue
             )
 
             // Update curation ID (may be newly created)

@@ -3,7 +3,7 @@
 export interface CuratorRequest {
   curation_id?: string;
   message: string;
-  user_id: string;
+  user_id?: string;
   model?: string;
 }
 

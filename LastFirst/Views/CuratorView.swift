@@ -1,9 +1,14 @@
 import SwiftUI
 
 enum CuratorAIModel: String, CaseIterable {
-    case chatGPT = "ChatGPT"
     case claude = "Claude"
-    case gemini = "Gemini"
+
+    var apiValue: String {
+        switch self {
+        case .claude:
+            return "claude"
+        }
+    }
 }
 
 struct CuratorView: View {
@@ -97,7 +102,7 @@ struct CuratorView: View {
                         }
                     }
                 },
-                curatorModel: selectedModel.rawValue.lowercased()
+                curatorModel: selectedModel.apiValue
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -123,32 +128,13 @@ struct CuratorView: View {
 
             Spacer()
 
-            Menu {
-                ForEach(CuratorAIModel.allCases, id: \.self) { model in
-                    Button {
-                        selectedModel = model
-                    } label: {
-                        if model == selectedModel {
-                            Label(model.rawValue, systemImage: "checkmark")
-                        } else {
-                            Text(model.rawValue)
-                        }
-                    }
-                }
-            } label: {
-                VStack(spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text("Curator")
-                            .font(.hedvigLettersSerif(24))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    Text(selectedModel.rawValue)
-                        .font(.hedvigLettersSerif(12))
-                        .foregroundStyle(.secondary)
-                }
+            VStack(spacing: 2) {
+                Text("Curator")
+                    .font(.hedvigLettersSerif(24))
+                Text(selectedModel.rawValue)
+                    .font(.hedvigLettersSerif(12))
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
 
             Spacer()
 

@@ -9,6 +9,8 @@ struct ContentView: View {
     @State private var homeScrollToTodayTrigger = false
     @State private var curatorInputText = ""
     @Namespace private var bottomBarNamespace
+    @Namespace private var readerTransitionNamespace
+    @State private var readerDragOffset: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -32,11 +34,37 @@ struct ContentView: View {
             if readerCoordinator.presentationState == .minimized {
                 VStack {
                     Spacer()
-                    MiniReaderBar()
+                    MiniReaderBar(
+                        namespace: readerTransitionNamespace,
+                        onExpand: expandReader,
+                        onDismiss: dismissReader
+                    )
                         .padding(.bottom, 68)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(7)
+            }
+
+            if readerCoordinator.presentationState == .expanded,
+               let viewModel = readerCoordinator.viewModel,
+               let item = readerCoordinator.activeItem {
+                ZStack(alignment: .top) {
+                    ReadingView(viewModel: viewModel, item: item)
+                        .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
+                        .matchedGeometryEffect(id: "readerSurface", in: readerTransitionNamespace)
+                        .ignoresSafeArea()
+                        .offset(y: presentedReaderYOffset)
+                        .simultaneousGesture(readerDismissGesture)
+
+                    Capsule()
+                        .fill(Color.white.opacity(0.5))
+                        .frame(width: 36, height: 5)
+                        .padding(.top, topSafeArea + 6)
+                        .offset(y: presentedReaderYOffset)
+                        .allowsHitTesting(false)
+                }
+                .ignoresSafeArea()
+                .zIndex(20)
             }
 
             // Custom bottom bar
@@ -48,16 +76,94 @@ struct ContentView: View {
         }
         .ignoresSafeArea(.keyboard)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: readerCoordinator.presentationState)
-        .fullScreenSheet(isPresented: readerCoordinator.isSheetPresented) {
-            if let viewModel = readerCoordinator.viewModel,
-               let item = readerCoordinator.activeItem {
-                ReadingView(viewModel: viewModel, item: item)
-                    .preferredColorScheme(appState.settings.appearanceMode.preferredColorScheme)
-            }
-        }
         .sheet(isPresented: $showCuratorSheet) {
             curatorSheetContent
         }
+    }
+
+    private var topSafeArea: CGFloat {
+        guard let windowScene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
+              let window = windowScene.windows.first else {
+            return 59
+        }
+
+        return window.safeAreaInsets.top
+    }
+
+    private var presentedReaderYOffset: CGFloat {
+        max(0, readerDragOffset)
+    }
+
+    private var readerDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
+            .onChanged { value in
+                guard canStartReaderDismissGesture(value) else {
+                    return
+                }
+
+                let verticalTranslation = value.translation.height
+                let horizontalTranslation = value.translation.width
+
+                guard abs(verticalTranslation) > abs(horizontalTranslation) else {
+                    return
+                }
+
+                if verticalTranslation > 0 {
+                    readerDragOffset = verticalTranslation
+                } else {
+                    readerDragOffset = verticalTranslation * 0.08
+                }
+            }
+            .onEnded { value in
+                guard canStartReaderDismissGesture(value) else {
+                    resetReaderDragOffset()
+                    return
+                }
+
+                let verticalTranslation = value.translation.height
+                let horizontalTranslation = value.translation.width
+
+                guard abs(verticalTranslation) > abs(horizontalTranslation) else {
+                    resetReaderDragOffset()
+                    return
+                }
+
+                let predictedVelocity = value.predictedEndTranslation.height - verticalTranslation
+
+                if verticalTranslation > 150 || predictedVelocity > 500 {
+                    minimizeReader()
+                } else {
+                    resetReaderDragOffset()
+                }
+            }
+    }
+
+    private func canStartReaderDismissGesture(_ value: DragGesture.Value) -> Bool {
+        value.startLocation.y <= topSafeArea + 80
+    }
+
+    private func resetReaderDragOffset() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            readerDragOffset = 0
+        }
+    }
+
+    private func minimizeReader() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+            readerDragOffset = 0
+            readerCoordinator.minimize()
+        }
+    }
+
+    private func expandReader() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+            readerCoordinator.expand()
+        }
+    }
+
+    private func dismissReader() {
+        readerDragOffset = 0
+        readerCoordinator.dismiss(appState: appState)
     }
 
     @ViewBuilder

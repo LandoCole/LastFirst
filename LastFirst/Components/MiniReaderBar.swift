@@ -4,6 +4,10 @@ struct MiniReaderBar: View {
     @EnvironmentObject var readerCoordinator: ReaderCoordinator
     @EnvironmentObject var appState: AppState
 
+    let namespace: Namespace.ID?
+    let onExpand: (() -> Void)?
+    let onDismiss: (() -> Void)?
+
     @State private var swipeOffset: CGFloat = 0
 
     private var viewModel: ReadingViewModel? { readerCoordinator.viewModel }
@@ -38,7 +42,7 @@ struct MiniReaderBar: View {
 
             // Open reader button
             Button {
-                readerCoordinator.expand()
+                handleExpand()
             } label: {
                 Image(systemName: "book.fill")
                     .font(.system(size: 20))
@@ -49,7 +53,7 @@ struct MiniReaderBar: View {
 
             // Dismiss button
             Button {
-                readerCoordinator.dismiss(appState: appState)
+                handleDismiss()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 20))
@@ -75,6 +79,7 @@ struct MiniReaderBar: View {
         }
         .glassStyle(shape: .pill)
         .padding(.horizontal, 16)
+        .modifier(MiniReaderSurfaceTransition(namespace: namespace))
         .offset(x: swipeOffset)
         .gesture(
             DragGesture(minimumDistance: 30)
@@ -90,7 +95,7 @@ struct MiniReaderBar: View {
                             swipeOffset = direction * UIScreen.main.bounds.width
                         }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            readerCoordinator.dismiss(appState: appState)
+                            handleDismiss()
                             swipeOffset = 0
                         }
                     } else {
@@ -102,7 +107,25 @@ struct MiniReaderBar: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            readerCoordinator.expand()
+            handleExpand()
+        }
+    }
+
+    private func handleExpand() {
+        if let onExpand {
+            onExpand()
+        } else {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                readerCoordinator.expand()
+            }
+        }
+    }
+
+    private func handleDismiss() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            readerCoordinator.dismiss(appState: appState)
         }
     }
 
@@ -119,5 +142,17 @@ struct MiniReaderBar: View {
     private func currentChapterTitle(vm: ReadingViewModel) -> String? {
         guard !vm.chapters.isEmpty else { return nil }
         return vm.chapters.last(where: { $0.startWordIndex <= vm.currentWordIndex })?.title
+    }
+}
+
+private struct MiniReaderSurfaceTransition: ViewModifier {
+    let namespace: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        if let namespace {
+            content.matchedGeometryEffect(id: "readerSurface", in: namespace)
+        } else {
+            content
+        }
     }
 }

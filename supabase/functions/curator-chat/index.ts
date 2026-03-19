@@ -1,6 +1,7 @@
 // curator-chat edge function — Multi-Agent Orchestrator
 // Handles SIMPLE queries inline, MODERATE/COMPLEX via waitUntil with parallel subagents
 
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type {
@@ -25,11 +26,60 @@ import {
   executeTool,
 } from "../_shared/tools.ts";
 
+declare const Deno: {
+  env: {
+    get(name: string): string | undefined;
+  };
+};
+
 // --- CORS ---
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+    this.name = "HttpError";
+  }
+}
+
+function createRequestScopedSupabaseClient(req: Request): SupabaseClient {
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const authHeader = req.headers.get("Authorization");
+
+  if (!url || !anonKey) {
+    throw new HttpError(500, "Supabase auth environment is not configured");
+  }
+
+  if (!authHeader) {
+    throw new HttpError(401, "Curator requires a signed-in session");
+  }
+
+  return createClient(url, anonKey, {
+    global: {
+      headers: {
+        Authorization: authHeader,
+      },
+    },
+  });
+}
+
+async function getAuthenticatedUserId(req: Request): Promise<string> {
+  const authClient = createRequestScopedSupabaseClient(req);
+  const { data, error } = await authClient.auth.getUser();
+
+  if (error || !data.user) {
+    throw new HttpError(401, "Curator requires a valid signed-in session");
+  }
+
+  return data.user.id;
+}
 
 // --- System Prompts ---
 
@@ -89,37 +139,54 @@ Each finding: {"source":"web","url":"...","title":"...","author":"...","summary"
 
 // --- Main Handler ---
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const body = (await req.json()) as CuratorRequest;
+    const authenticatedUserId = await getAuthenticatedUserId(req);
+    const message = body.message?.trim();
+
+    if (!message) {
+      throw new HttpError(400, "Message is required");
+    }
+
+    if (body.user_id && body.user_id !== authenticatedUserId) {
+      throw new HttpError(403, "Authenticated user does not match the curator request");
+    }
+
+    const request: CuratorRequest = {
+      ...body,
+      message,
+      user_id: authenticatedUserId,
+    };
     const supabase = createSupabaseClient();
 
     // Get or create curation
-    const curationId = await getOrCreateCuration(supabase, body);
-    await saveUserMessage(supabase, curationId, body.message);
+    const curationId = await getOrCreateCuration(supabase, request, authenticatedUserId);
+    await saveUserMessage(supabase, curationId, request.message);
 
     // Fetch conversation history for context
     const history = await getConversationHistory(supabase, curationId);
 
     // Classify complexity
-    const classification = await classifyQuery(body.message, history);
+    const classification = await classifyQuery(request.message, history);
+    const totalAgentCount = classification.complexity === "simple" ? 1 : classification.subqueries.length + 1;
 
     // Update curation with complexity
     await supabase
       .from("curations")
       .update({
         complexity: classification.complexity,
-        agent_count: classification.complexity === "simple" ? 1 : classification.subqueries.length + 1,
+        agent_count: totalAgentCount,
       })
       .eq("id", curationId);
 
     if (classification.complexity === "simple") {
       // SIMPLE: inline agentic loop (backward compatible)
-      const result = await runInlineAgentLoop(supabase, curationId, body, history);
+      const result = await runInlineAgentLoop(supabase, curationId, request, history);
 
       // Save assistant message
       await supabase.from("curation_messages").insert({
@@ -138,6 +205,8 @@ serve(async (req) => {
           curation_id: curationId,
           response: result.response,
           items_added: result.itemsAdded,
+          complexity: classification.complexity,
+          agent_count: totalAgentCount,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -146,8 +215,8 @@ serve(async (req) => {
     // MODERATE/COMPLEX: return immediately, run in background
     await emitStatus(supabase, curationId, {
       type: "agent_spawned",
-      totalAgents: classification.subqueries.length,
-      message: `Launching ${classification.subqueries.length} research agents...`,
+      totalAgents: totalAgentCount,
+      message: `Launching ${totalAgentCount} research agents...`,
     });
 
     // @ts-ignore: EdgeRuntime.waitUntil is available in Supabase Edge Functions
@@ -163,7 +232,7 @@ serve(async (req) => {
           const userPrefs = await runSubagent(supabase, curationId, {
             role: "preference_analyst",
             query: "Analyze user reading history and preferences",
-            userId: body.user_id,
+            userId: request.user_id!,
           });
 
           // 2. Run remaining subagents in parallel
@@ -172,7 +241,7 @@ serve(async (req) => {
               runSubagent(supabase, curationId, {
                 role: sq.role,
                 query: sq.query,
-                userId: body.user_id,
+                userId: request.user_id!,
                 userPreferences: userPrefs.findings,
               })
             )
@@ -180,7 +249,7 @@ serve(async (req) => {
 
           // 3. Synthesize findings
           const allFindings = subagentResults.flatMap((r) => r.findings);
-          await synthesizeAndCreateItems(supabase, curationId, allFindings, body, history);
+          await synthesizeAndCreateItems(supabase, curationId, allFindings, request, history);
 
           // 4. Mark ready
           await supabase
@@ -209,15 +278,17 @@ serve(async (req) => {
       JSON.stringify({
         curation_id: curationId,
         complexity: classification.complexity,
-        agent_count: classification.subqueries.length,
+        agent_count: totalAgentCount,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Curator chat error:", error);
+    const status = error instanceof HttpError ? error.status : 500;
+    const message = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: String(error) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: message }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
@@ -226,16 +297,31 @@ serve(async (req) => {
 
 async function getOrCreateCuration(
   supabase: SupabaseClient,
-  body: CuratorRequest
+  body: CuratorRequest,
+  userId: string
 ): Promise<string> {
   if (body.curation_id) {
-    return body.curation_id;
+    const { data, error } = await supabase
+      .from("curations")
+      .select("id, user_id")
+      .eq("id", body.curation_id)
+      .single();
+
+    if (error || !data) {
+      throw new HttpError(404, "Curation not found");
+    }
+
+    if (data.user_id !== userId) {
+      throw new HttpError(403, "You do not have access to this curation");
+    }
+
+    return data.id;
   }
 
   const { data, error } = await supabase
     .from("curations")
     .insert({
-      user_id: body.user_id,
+      user_id: userId,
       type: "user_directed",
       title: body.message.slice(0, 100),
       prompt: body.message,
@@ -322,6 +408,16 @@ async function runInlineAgentLoop(
 ): Promise<{ response: string; itemsAdded: number }> {
   const provider = resolveProvider(body.model ?? "claude");
   const modelId = resolveModelId(body.model ?? "claude", provider);
+  const stepStartMessages = [
+    "Searching for relevant content...",
+    "Reviewing promising matches...",
+    "Adding recommendations to your curation...",
+  ];
+  const stepCompleteMessages = [
+    "Search complete",
+    "Evaluation complete",
+    "Curation complete",
+  ];
 
   // Build plan
   await emitStatus(supabase, curationId, {
@@ -340,6 +436,8 @@ async function runInlineAgentLoop(
 
   let itemsAdded = 0;
   const maxIterations = 10;
+  let activeStepIndex: number | null = null;
+  const completedSteps = new Set<number>();
 
   for (let i = 0; i < maxIterations; i++) {
     const result = await callLLM(
@@ -352,6 +450,13 @@ async function runInlineAgentLoop(
     );
 
     if (result.toolCalls.length === 0) {
+      if (activeStepIndex !== null && !completedSteps.has(activeStepIndex)) {
+        await emitStatus(supabase, curationId, {
+          type: "step_complete",
+          stepIndex: activeStepIndex,
+          message: stepCompleteMessages[activeStepIndex] ?? "Step complete",
+        });
+      }
       return { response: result.content, itemsAdded };
     }
 
@@ -364,6 +469,27 @@ async function runInlineAgentLoop(
     for (const tc of result.toolCalls) {
       const stepIndex = tc.name === "search_content" || tc.name === "search_web" ? 0
         : tc.name === "get_content_details" || tc.name === "fetch_url" ? 1 : 2;
+
+      if (activeStepIndex !== stepIndex) {
+        if (activeStepIndex !== null && !completedSteps.has(activeStepIndex)) {
+          await emitStatus(supabase, curationId, {
+            type: "step_complete",
+            stepIndex: activeStepIndex,
+            message: stepCompleteMessages[activeStepIndex] ?? "Step complete",
+          });
+          completedSteps.add(activeStepIndex);
+        }
+
+        if (!completedSteps.has(stepIndex)) {
+          await emitStatus(supabase, curationId, {
+            type: "step_start",
+            stepIndex,
+            message: stepStartMessages[stepIndex] ?? "Working...",
+          });
+        }
+
+        activeStepIndex = stepIndex;
+      }
 
       await emitStatus(supabase, curationId, {
         type: "step_progress",
@@ -415,12 +541,13 @@ async function runInlineAgentLoop(
         });
       }
     }
+  }
 
-    // Mark steps complete
+  if (activeStepIndex !== null && !completedSteps.has(activeStepIndex)) {
     await emitStatus(supabase, curationId, {
       type: "step_complete",
-      stepIndex: 0,
-      message: "Search complete",
+      stepIndex: activeStepIndex,
+      message: stepCompleteMessages[activeStepIndex] ?? "Step complete",
     });
   }
 

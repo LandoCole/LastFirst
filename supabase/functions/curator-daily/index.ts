@@ -8,6 +8,13 @@ import { callAnthropic } from "../_shared/llm.ts";
 import { createSupabaseClient } from "../_shared/status.ts";
 import { TOOL_DEFINITIONS, executeTool } from "../_shared/tools.ts";
 
+declare const Deno: {
+  env: {
+    get(name: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -22,6 +29,14 @@ interface DailyCurationConfig {
   last_generated_at: string | null;
 }
 
+interface DelegatedDailyRunResponse {
+  ok?: boolean;
+  processed_users?: number;
+  created_curations?: number;
+  skipped_users?: number;
+  results?: unknown[];
+}
+
 function isToday(dateStr: string): boolean {
   const date = new Date(dateStr);
   const now = new Date();
@@ -32,9 +47,68 @@ function isToday(dateStr: string): boolean {
   );
 }
 
-Deno.serve(async (req) => {
+function getAgentServiceConfig(): { url: string; internalKey: string } | null {
+  const url = Deno.env.get("AGENT_SERVICE_URL");
+  const internalKey = Deno.env.get("AGENT_SERVICE_INTERNAL_KEY");
+
+  if (!url || !internalKey) {
+    return null;
+  }
+
+  return {
+    url: url.replace(/\/$/, ""),
+    internalKey,
+  };
+}
+
+async function invokeExternalDailyCurator(req: Request): Promise<Response | null> {
+  const config = getAgentServiceConfig();
+  if (!config) {
+    return null;
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const response = await fetch(`${config.url}/internal/daily-curations/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Agent-Service-Key": config.internalKey,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    console.error("External daily curator error:", response.status, responseText);
+    return new Response(
+      JSON.stringify({ error: "External daily curator failed", details: responseText }),
+      {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  let payload: DelegatedDailyRunResponse | { raw: string };
+  try {
+    payload = JSON.parse(responseText) as DelegatedDailyRunResponse;
+  } catch {
+    payload = { raw: responseText };
+  }
+
+  return new Response(JSON.stringify(payload), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  const delegatedResponse = await invokeExternalDailyCurator(req);
+  if (delegatedResponse) {
+    return delegatedResponse;
   }
 
   const supabase = createSupabaseClient();

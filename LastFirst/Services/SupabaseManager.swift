@@ -268,13 +268,11 @@ final class SupabaseManager: @unchecked Sendable {
     struct CuratorChatRequest: Codable {
         let curationId: UUID?
         let message: String
-        let userId: String
         let model: String?
 
         enum CodingKeys: String, CodingKey {
             case message, model
             case curationId = "curation_id"
-            case userId = "user_id"
         }
     }
 
@@ -293,15 +291,12 @@ final class SupabaseManager: @unchecked Sendable {
         }
     }
 
-    func sendCuratorMessage(curationId: UUID?, message: String, userId: UUID, model: String? = nil) async throws -> CuratorChatResponse {
-        guard let client else {
-            throw NSError(domain: "SupabaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Supabase client not initialized"])
-        }
+    func sendCuratorMessage(curationId: UUID?, message: String, model: String? = nil) async throws -> CuratorChatResponse {
+        let client = try await authenticatedEdgeFunctionsClient(functionName: "curator-chat")
 
         let requestBody = CuratorChatRequest(
             curationId: curationId,
             message: message,
-            userId: userId.uuidString,
             model: model
         )
 

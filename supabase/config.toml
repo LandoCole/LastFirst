@@ -1,2 +1,8 @@
 [functions.scrape-url]
 verify_jwt = false
+
+[functions.curator-chat]
+verify_jwt = true
+
+[functions.curator-daily]
+verify_jwt = true
