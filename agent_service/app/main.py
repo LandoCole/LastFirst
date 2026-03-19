@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import logging
+import traceback
+
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi.responses import JSONResponse
+
+logger = logging.getLogger("lastfirst.agent")
 
 from app.config import Settings, get_settings
 from app.models import (
@@ -90,12 +96,19 @@ async def run_daily_curations(
     return await curator.run(request)
 
 
-@app.post("/internal/curator-chat", response_model=CuratorChatResponse, dependencies=[Depends(require_internal_key)])
+@app.post("/internal/curator-chat", dependencies=[Depends(require_internal_key)])
 async def curator_chat(
     request: CuratorChatRequest,
     chat_service: CuratorChatService = Depends(get_curator_chat),
 ) -> CuratorChatResponse:
-    return await chat_service.handle(request)
+    try:
+        return await chat_service.handle(request)
+    except Exception as exc:
+        logger.error("curator-chat failed: %s\n%s", exc, traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(exc), "trace": traceback.format_exc()},
+        )
 
 
 @app.post("/internal/vaults/provision", response_model=VaultProvisionResponse, dependencies=[Depends(require_internal_key)])
