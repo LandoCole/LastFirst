@@ -80,7 +80,7 @@ class NormalizedLLMResponse(BaseModel):
     content: str
     tool_calls: list[ToolCall]
     stop_reason: str
-    usage: dict[str, int] | None = None
+    usage: dict[str, Any] | None = None
 
 
 class Finding(BaseModel):
