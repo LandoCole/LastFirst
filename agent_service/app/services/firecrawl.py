@@ -17,17 +17,20 @@ class FirecrawlService:
         if not self._api_key:
             return {"results": [], "count": 0, "error": "FIRECRAWL_API_KEY not set"}
 
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                "https://api.firecrawl.dev/v2/search",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self._api_key}",
-                },
-                json={"query": query, "limit": limit},
-            )
-            response.raise_for_status()
-            payload = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                response = await client.post(
+                    "https://api.firecrawl.dev/v2/search",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self._api_key}",
+                    },
+                    json={"query": query, "limit": limit},
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except Exception as exc:
+            return {"results": [], "count": 0, "error": f"Web search failed: {exc}"}
 
         results = [
             {
