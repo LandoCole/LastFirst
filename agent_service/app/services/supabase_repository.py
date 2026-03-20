@@ -44,11 +44,9 @@ class SupabaseRepository:
                     "settings": request.settings,
                 }
             )
-            .select("id")
-            .single()
             .execute()
         )
-        return response.data["id"], True
+        return response.data[0]["id"], True
 
     def start_vault_sync_run(
         self,
@@ -67,11 +65,9 @@ class SupabaseRepository:
                     "metadata": metadata or {},
                 }
             )
-            .select("id")
-            .single()
             .execute()
         )
-        return response.data["id"]
+        return response.data[0]["id"]
 
     def complete_vault_sync_run(
         self,
@@ -306,7 +302,6 @@ class SupabaseRepository:
         response = (
             self._client.table("vault_notes")
             .upsert(payload, on_conflict="vault_id,path")
-            .select("id, path")
             .execute()
         )
         rows = response.data or []
@@ -384,11 +379,9 @@ class SupabaseRepository:
                     "expires_at": expires_at,
                 }
             )
-            .select("id")
-            .single()
             .execute()
         )
-        return response.data["id"]
+        return response.data[0]["id"]
 
     def update_curation(self, curation_id: str, values: dict[str, Any]) -> None:
         self._client.table("curations").update(values).eq("id", curation_id).execute()
@@ -457,11 +450,9 @@ class SupabaseRepository:
                 "prompt": message,
                 "status": "researching",
             })
-            .select("id")
-            .single()
             .execute()
         )
-        return response.data["id"]
+        return response.data[0]["id"]
 
     def get_conversation_history(self, curation_id: str) -> list[dict[str, str]]:
         response = (
@@ -484,11 +475,9 @@ class SupabaseRepository:
                 "status": "running",
                 "started_at": datetime.now(UTC).isoformat(),
             })
-            .select("id")
-            .single()
             .execute()
         )
-        return response.data["id"]
+        return response.data[0]["id"]
 
     def complete_agent_task(
         self,
