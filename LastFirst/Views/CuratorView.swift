@@ -1,12 +1,16 @@
 import SwiftUI
+import MarkdownUI
 
 enum CuratorAIModel: String, CaseIterable {
     case claude = "Claude"
+    case gpt4o = "GPT-4o"
+    case gemini = "Gemini"
 
     var apiValue: String {
         switch self {
-        case .claude:
-            return "claude"
+        case .claude: return "claude-sonnet-4-20250514"
+        case .gpt4o: return "gpt-4o"
+        case .gemini: return "gemini-2.0-flash"
         }
     }
 }
@@ -17,7 +21,7 @@ struct CuratorView: View {
     @State private var selectedModel: CuratorAIModel = .claude
     @State private var showHistory = false
     @State private var showCuratedPane = false
-    @State private var selectedDetailItem: CurationItem?
+    @State private var curationPreviewContext: CurationPreviewContext?
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var viewModel: CuratorViewModel
@@ -40,6 +44,13 @@ struct CuratorView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 34)
 
+            LinearGradient(
+                colors: [Color(.systemBackground), .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 20)
+
             if viewModel.messages.isEmpty && viewModel.curationItems.isEmpty {
                 Spacer()
                 quoteView
@@ -57,23 +68,6 @@ struct CuratorView: View {
                     .padding(.vertical, 4)
             }
 
-            // Curated pane button
-            if !viewModel.curationItems.isEmpty {
-                Button {
-                    showCuratedPane = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "books.vertical")
-                            .font(.system(size: 13))
-                        Text("Curated (\(viewModel.curationItems.count))")
-                            .font(.rethinkSans(13, weight: .medium))
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity)
-                }
-            }
-
             inputBar
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
@@ -84,9 +78,10 @@ struct CuratorView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .sheet(item: $selectedDetailItem) { item in
-            CurationItemDetailSheet(
-                item: item,
+        .sheet(item: $curationPreviewContext) { context in
+            CurationPreviewSheet(
+                items: context.items,
+                initialIndex: context.initialIndex,
                 userId: authVM.currentUser?.id,
                 onSave: { curationItem in
                     appState.addCuratedItem(curationItem)
@@ -104,8 +99,6 @@ struct CuratorView: View {
                 },
                 curatorModel: selectedModel.apiValue
             )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showCuratedPane) {
             curatedPaneSheet
@@ -128,13 +121,28 @@ struct CuratorView: View {
 
             Spacer()
 
-            VStack(spacing: 2) {
-                Text("Curator")
-                    .font(.hedvigLettersSerif(24))
-                Text(selectedModel.rawValue)
-                    .font(.hedvigLettersSerif(12))
+            Menu {
+                ForEach(CuratorAIModel.allCases, id: \.self) { model in
+                    Button {
+                        selectedModel = model
+                    } label: {
+                        Label(model.rawValue, systemImage: selectedModel == model ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                VStack(spacing: 2) {
+                    Text("Curator")
+                        .font(.hedvigLettersSerif(24))
+                    HStack(spacing: 4) {
+                        Text(selectedModel.rawValue)
+                            .font(.hedvigLettersSerif(12))
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 8, weight: .medium))
+                    }
                     .foregroundStyle(.secondary)
+                }
             }
+            .foregroundStyle(.primary)
 
             Spacer()
 
@@ -174,8 +182,14 @@ struct CuratorView: View {
                         if message.role == "assistant",
                            let items = viewModel.messageItems[message.id],
                            !items.isEmpty {
-                            CurationCardStack(items: items, selectedDetailItem: $selectedDetailItem)
-                                .padding(.horizontal, 16)
+                            CurationCardStack(items: items) { tappedItem in
+                                if let idx = items.firstIndex(where: { $0.id == tappedItem.id }) {
+                                    curationPreviewContext = CurationPreviewContext(items: items, initialIndex: idx)
+                                } else {
+                                    curationPreviewContext = CurationPreviewContext(items: [tappedItem])
+                                }
+                            }
+                            .padding(.horizontal, 16)
                         }
                     }
 
@@ -223,36 +237,61 @@ struct CuratorView: View {
     }
 
     private func messageBubble(_ message: CurationMessage) -> some View {
-        HStack {
-            if message.role == "user" { Spacer(minLength: 60) }
-
-            Text(message.content)
-                .font(.rethinkSans(14))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    message.role == "user"
-                        ? Color.warmForeground
-                        : Color.warmBackground
-                )
-                .foregroundStyle(message.role == "user" ? .white : .primary)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-
-            if message.role != "user" { Spacer(minLength: 60) }
+        Group {
+            if message.role == "user" {
+                HStack {
+                    Spacer(minLength: 60)
+                    Text(message.content)
+                        .font(.rethinkSans(14))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color.warmForeground)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .padding(.horizontal, 16)
+            } else {
+                Markdown(message.content)
+                    .markdownTextStyle(\.text) {
+                        FontSize(.em(0.875))
+                    }
+                    .padding(.horizontal, 24)
+            }
         }
-        .padding(.horizontal, 16)
     }
 
     // MARK: - Curated Pane Sheet
 
+    @State private var showSaveToCollection = false
+    @State private var showNewCollectionAlert = false
+    @State private var newCollectionName = ""
+
     private var curatedPaneSheet: some View {
         NavigationStack {
-            List {
-                ForEach(viewModel.curationItems) { item in
-                    curatedPaneRow(item)
+            VStack(spacing: 0) {
+                List {
+                    ForEach(viewModel.curationItems) { item in
+                        curatedPaneRow(item)
+                    }
+                }
+                .listStyle(.plain)
+
+                if !viewModel.selectedItemIds.isEmpty {
+                    Button {
+                        showSaveToCollection = true
+                    } label: {
+                        Text("Save to Collection")
+                            .font(.rethinkSans(15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(hex: "463F3A"))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
             }
-            .listStyle(.plain)
             .navigationTitle("Curated Items")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -260,26 +299,72 @@ struct CuratorView: View {
                     Button("Done") { showCuratedPane = false }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save All") {
-                        viewModel.selectAll()
-                        Task { await viewModel.saveSelectedToLibrary(appState: appState) }
-                        showCuratedPane = false
+                    Button(viewModel.selectedItemIds.count == viewModel.curationItems.count ? "Deselect All" : "Select All") {
+                        if viewModel.selectedItemIds.count == viewModel.curationItems.count {
+                            viewModel.deselectAll()
+                        } else {
+                            viewModel.selectAll()
+                        }
                     }
                 }
+            }
+            .confirmationDialog("Save to Collection", isPresented: $showSaveToCollection, titleVisibility: .visible) {
+                ForEach(appState.readingLists) { list in
+                    Button(list.name) {
+                        saveSelectedToCollection(listId: list.id)
+                    }
+                }
+                Button("New Collection...") {
+                    showNewCollectionAlert = true
+                }
+                Button("Library Only") {
+                    saveSelectedToLibraryOnly()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .alert("New Collection", isPresented: $showNewCollectionAlert) {
+                TextField("Collection name", text: $newCollectionName)
+                Button("Create") {
+                    guard !newCollectionName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                    let list = appState.addReadingList(name: newCollectionName.trimmingCharacters(in: .whitespaces))
+                    saveSelectedToCollection(listId: list.id)
+                    newCollectionName = ""
+                }
+                Button("Cancel", role: .cancel) { newCollectionName = "" }
             }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 
+    private func saveSelectedToCollection(listId: UUID) {
+        let selected = viewModel.curationItems.filter { viewModel.selectedItemIds.contains($0.id) }
+        for item in selected {
+            let libraryItem = appState.addCuratedItem(item)
+            appState.addItemToList(libraryItem.id, listId: listId)
+            Task {
+                try? await SupabaseManager.shared.markCurationItemSaved(itemId: item.id)
+            }
+        }
+        viewModel.selectedItemIds.removeAll()
+        showCuratedPane = false
+    }
+
+    private func saveSelectedToLibraryOnly() {
+        let selected = viewModel.curationItems.filter { viewModel.selectedItemIds.contains($0.id) }
+        for item in selected {
+            _ = appState.addCuratedItem(item)
+            Task {
+                try? await SupabaseManager.shared.markCurationItemSaved(itemId: item.id)
+            }
+        }
+        viewModel.selectedItemIds.removeAll()
+        showCuratedPane = false
+    }
+
     private func curatedPaneRow(_ item: CurationItem) -> some View {
         let isSelected = viewModel.selectedItemIds.contains(item.id)
-        let coverURL: URL? = {
-            if let urlString = item.content?.coverUrl {
-                return URL(string: urlString)
-            }
-            return nil
-        }()
+        let coverURL: URL? = item.displayImageUrl
         let iconName: String = {
             switch item.content?.fileType ?? item.itemType {
             case "epub": return "book.closed.fill"
@@ -366,15 +451,26 @@ struct CuratorView: View {
     private var inputBar: some View {
         HStack(spacing: 10) {
             Button {
-                // Future: attachment action
+                showCuratedPane = true
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Color(hex: "B08D57"))
+                        .fill(Color(hex: "463F3A"))
                         .frame(width: 36, height: 36)
-                    Image(systemName: "plus")
+                    Image(systemName: "books.vertical.fill")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.white)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if viewModel.curationItems.count > 0 {
+                        Text("\(viewModel.curationItems.count)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 16, minHeight: 16)
+                            .background(Color(hex: "B17E25"))
+                            .clipShape(Circle())
+                            .offset(x: 4, y: -4)
+                    }
                 }
             }
             .buttonStyle(.plain)
@@ -386,6 +482,7 @@ struct CuratorView: View {
                     .padding(.trailing, inputText.isEmpty ? 0 : 28)
                     .frame(height: 36)
                     .focused($isInputFocused)
+                    .tint(Color(hex: "463F3A"))
                     .onSubmit { sendMessage() }
 
                 if !inputText.isEmpty {
@@ -409,7 +506,7 @@ struct CuratorView: View {
                     .foregroundStyle(
                         inputText.isEmpty || viewModel.isLoading
                             ? Color.secondary
-                            : Color.accentColor
+                            : Color(hex: "B17E25")
                     )
             }
             .disabled(inputText.isEmpty || viewModel.isLoading)

@@ -39,6 +39,11 @@ struct CurationItem: Identifiable, Codable, Equatable {
     var savedToLibrary: Bool?
     var createdAt: Date?
     var extractedText: String?
+    var externalWordCount: Int?
+    var externalEstimatedReadMinutes: Int?
+    var externalFileType: String?
+    var externalAvailability: String?
+    var externalImageUrl: String?
 
     // Joined content (optional, populated when fetching with select)
     var content: ContentItem?
@@ -56,6 +61,11 @@ struct CurationItem: Identifiable, Codable, Equatable {
         case savedToLibrary = "saved_to_library"
         case createdAt = "created_at"
         case extractedText = "extracted_text"
+        case externalWordCount = "external_word_count"
+        case externalEstimatedReadMinutes = "external_estimated_read_minutes"
+        case externalFileType = "external_file_type"
+        case externalAvailability = "external_availability"
+        case externalImageUrl = "external_image_url"
     }
 
     var displayTitle: String {
@@ -68,6 +78,32 @@ struct CurationItem: Identifiable, Codable, Equatable {
 
     var displaySummary: String? {
         content?.summary ?? externalSummary
+    }
+
+    var displayWordCount: Int? {
+        content?.wordCount ?? externalWordCount
+    }
+
+    var displayEstimatedReadMinutes: Int? {
+        content?.estimatedReadMinutes ?? externalEstimatedReadMinutes
+            ?? displayWordCount.map { max(1, $0 / 250) }
+    }
+
+    var displayFileType: String? {
+        content?.fileType ?? externalFileType
+            ?? (itemType != "content" && itemType != "external_link" ? itemType : "web")
+    }
+
+    var displayAvailability: String? {
+        content?.availability ?? externalAvailability
+            ?? (itemType == "external_link" || itemType == "book" ? "external_purchase" : nil)
+    }
+
+    var displayImageUrl: URL? {
+        if let s = content?.coverUrl ?? externalImageUrl {
+            return URL(string: s)
+        }
+        return nil
     }
 }
 

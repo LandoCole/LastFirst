@@ -32,18 +32,6 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
-    name: "fetch_url",
-    description:
-      "Fetch and extract content from a URL. Returns title, author, and text content.",
-    input_schema: {
-      type: "object",
-      properties: {
-        url: { type: "string", description: "URL to fetch" },
-      },
-      required: ["url"],
-    },
-  },
-  {
     name: "get_user_reading_history",
     description:
       "Get the user's reading history including past interactions, bookmarks, and reading sessions.",
@@ -78,6 +66,26 @@ export const TOOL_DEFINITIONS = [
           enum: ["content", "external_link", "book", "article", "paper", "pdf"],
           description: "Type of item",
         },
+        external_word_count: {
+          type: "number",
+          description: "Word count for external items",
+        },
+        external_estimated_read_minutes: {
+          type: "number",
+          description: "Estimated reading time in minutes",
+        },
+        external_file_type: {
+          type: "string",
+          description: "Content format: web, pdf, epub",
+        },
+        external_availability: {
+          type: "string",
+          description: "full_text, downloadable, external_purchase, or paywalled",
+        },
+        external_image_url: {
+          type: "string",
+          description: "Cover or preview image URL",
+        },
       },
       required: ["curation_id", "item_type"],
     },
@@ -108,7 +116,7 @@ export function getSubagentTools(role: string) {
         ["search_content", "get_content_details"].includes(t.name)
       );
     case "web_researcher":
-      return TOOL_DEFINITIONS.filter((t) => t.name === "fetch_url");
+      return TOOL_DEFINITIONS.filter((t) => t.name === "ingest_url");
     default:
       return TOOL_DEFINITIONS;
   }
@@ -140,8 +148,6 @@ export async function executeTool(
       return await searchContent(supabase, input);
     case "get_content_details":
       return await getContentDetails(supabase, input);
-    case "fetch_url":
-      return await fetchUrl(input);
     case "get_user_reading_history":
       return await getUserReadingHistory(supabase, input);
     case "create_curation_item":
@@ -297,23 +303,6 @@ async function getContentDetails(
   return JSON.stringify(data);
 }
 
-async function fetchUrl(input: Record<string, unknown>): Promise<string> {
-  const url = String(input.url ?? "");
-
-  try {
-    const scraped = await scrapeUrl(url);
-    return JSON.stringify({
-      title: scraped.title,
-      author: scraped.author,
-      content: scraped.markdown.slice(0, 4000),
-      url,
-      readable: scraped.markdown.length > 200,
-    });
-  } catch (e) {
-    return JSON.stringify({ error: `Failed to fetch: ${String(e)}` });
-  }
-}
-
 async function getUserReadingHistory(
   supabase: SupabaseClient,
   input: Record<string, unknown>
@@ -379,6 +368,11 @@ async function createCurationItem(
   if (input.external_author) item.external_author = input.external_author;
   if (input.external_summary) item.external_summary = input.external_summary;
   if (input.agent_note) item.agent_note = input.agent_note;
+  if (input.external_word_count) item.external_word_count = input.external_word_count;
+  if (input.external_estimated_read_minutes) item.external_estimated_read_minutes = input.external_estimated_read_minutes;
+  if (input.external_file_type) item.external_file_type = input.external_file_type;
+  if (input.external_availability) item.external_availability = input.external_availability;
+  if (input.external_image_url) item.external_image_url = input.external_image_url;
 
   const { data, error } = await supabase
     .from("curation_items")
@@ -402,6 +396,8 @@ async function ingestUrl(
     const author = String(input.author ?? "") || scraped.author;
     const wordCount = scraped.markdown.split(/\s+/).filter(Boolean).length;
     const estimatedReadMinutes = Math.max(1, Math.round(wordCount / 238));
+    const coverUrl = scraped.metadata["og:image"] || null;
+    const fileType = url.toLowerCase().endsWith(".pdf") ? "pdf" : "web";
 
     // Persist to content table
     let contentId: string | null = null;
@@ -420,8 +416,9 @@ async function ingestUrl(
             language: scraped.metadata["language"] ?? scraped.metadata["og:locale"] ?? "en",
             word_count: wordCount,
             estimated_read_minutes: estimatedReadMinutes,
-            file_type: "web",
+            file_type: fileType,
             is_available: true,
+            cover_url: coverUrl,
             metadata: scraped.metadata,
           },
           { onConflict: "source_url" }
@@ -443,6 +440,10 @@ async function ingestUrl(
       content_id: contentId,
       title,
       author,
+      word_count: wordCount,
+      estimated_read_minutes: estimatedReadMinutes,
+      file_type: fileType,
+      image_url: coverUrl,
       content_preview: scraped.markdown.slice(0, 500),
       url,
     });

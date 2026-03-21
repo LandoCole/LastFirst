@@ -37,17 +37,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "fetch_url",
-        "description": "Fetch and extract content from a URL. Returns title, author, and text content.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "URL to fetch"},
-            },
-            "required": ["url"],
-        },
-    },
-    {
         "name": "get_user_reading_history",
         "description": "Get the user's reading history including past interactions, bookmarks, and reading sessions.",
         "input_schema": {
@@ -155,10 +144,6 @@ class ToolExecutor:
             payload = self._repository.get_content_details(str(input_data.get("content_id", "")))
             return json.dumps(payload)
 
-        if tool_name == "fetch_url":
-            payload = await self._fetch_url(str(input_data.get("url", "")))
-            return json.dumps(payload)
-
         if tool_name == "get_user_reading_history":
             payload = self._repository.get_user_reading_history(
                 user_id=str(input_data.get("user_id", "")),
@@ -217,34 +202,6 @@ class ToolExecutor:
 
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
-    async def _fetch_url(self, url: str) -> dict[str, Any]:
-        try:
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                response = await client.get(
-                    url, headers={"User-Agent": "Mozilla/5.0 (compatible; LastFirst/1.0)"}
-                )
-                response.raise_for_status()
-                html = response.text
-        except Exception as exc:
-            return {"error": f"Failed to fetch URL: {exc}"}
-
-        from readability import Document
-        from markdownify import markdownify as md
-
-        doc = Document(html)
-        title = doc.title()
-        content_html = doc.summary()
-        markdown = md(content_html, heading_style="ATX", strip=["img", "script", "style"])
-        author = _extract_author_from_html(html)
-
-        return {
-            "title": title,
-            "author": author,
-            "content": markdown[:4000],
-            "url": url,
-            "readable": len(markdown) > 200,
-        }
-
     async def _ingest_url(self, url: str, title: Any = None, author: Any = None) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -268,6 +225,7 @@ class ToolExecutor:
 
         chosen_title = str(title or extracted_title or "")
         chosen_author = str(author or extracted_author or "") or None
+        cover_url = metadata.get("og:image")
 
         row = self._repository.upsert_web_content(
             url=url,
@@ -276,13 +234,21 @@ class ToolExecutor:
             markdown=markdown,
             html=content_html,
             metadata=metadata,
+            cover_url=cover_url,
         )
         content_id = row.get("id") if isinstance(row, dict) else None
+        word_count = len([w for w in markdown.split() if w])
+        estimated_read_minutes = max(1, round(word_count / 238))
+        file_type = "pdf" if url.lower().endswith(".pdf") else "web"
         return {
             "success": True,
             "content_id": content_id,
             "title": chosen_title,
             "author": chosen_author,
+            "word_count": word_count,
+            "estimated_read_minutes": estimated_read_minutes,
+            "file_type": file_type,
+            "image_url": cover_url,
             "content_preview": markdown[:500],
             "url": url,
         }

@@ -23,6 +23,10 @@ You have access to tools to search the internal library, fetch URLs, and add ite
 
 When you find relevant content, use create_curation_item to add it to the curation with a personalized agent_note explaining why you're recommending it.
 
+When you find content via web search, use ingest_url to scrape the URL for real metadata (word count, reading time, cover image). Pass enriched metadata when calling create_curation_item: external_word_count, external_estimated_read_minutes, external_file_type, external_availability, external_image_url.
+
+Your chat response should be a brief research summary (2-4 sentences) about what you found and why these items are relevant. Do NOT list each item in detail -- the structured content cards will display that.
+
 Be conversational but efficient. Always search before recommending. Prefer library content when available, supplement with web finds."""
 
 CLASSIFIER_PROMPT = """You classify user queries for a reading curation agent. Respond with ONLY valid JSON.
@@ -62,6 +66,11 @@ CHAT_TOOL_DEFINITIONS = TOOL_DEFINITIONS + [
                     "enum": ["content", "external_link", "book", "article", "paper", "pdf"],
                     "description": "Type of item",
                 },
+                "external_word_count": {"type": "number", "description": "Word count for external items"},
+                "external_estimated_read_minutes": {"type": "number", "description": "Estimated reading time in minutes"},
+                "external_file_type": {"type": "string", "description": "Content format: web, pdf, epub"},
+                "external_availability": {"type": "string", "description": "full_text, downloadable, external_purchase, or paywalled"},
+                "external_image_url": {"type": "string", "description": "Cover or preview image URL"},
             },
             "required": ["curation_id", "item_type"],
         },
@@ -71,7 +80,7 @@ CHAT_TOOL_DEFINITIONS = TOOL_DEFINITIONS + [
 SUBAGENT_TOOLS: dict[str, list[str]] = {
     "preference_analyst": ["get_user_reading_history"],
     "library_searcher": ["search_content", "get_content_details"],
-    "web_researcher": ["fetch_url"],
+    "web_researcher": ["ingest_url"],
 }
 
 SUBAGENT_MAX_ITERATIONS: dict[str, int] = {
@@ -107,9 +116,19 @@ def _get_subagent_prompt(role: str, user_preferences: list[Finding] | None = Non
         )
     if role == "web_researcher":
         return (
-            f"You are a Web Researcher agent for the LastFirst reading app. You have built-in web search capability to find books, articles, papers, and reading material that aren't in the internal library.{pref_context}\n\n"
-            "Use multiple search queries with different angles. For promising results, use the fetch_url tool to get more details. Return findings as a JSON array.\n\n"
-            'Each finding: {"source":"web","url":"...","title":"...","author":"...","summary":"...","relevance_note":"why this is relevant","confidence":0.0-1.0}'
+            f"You are a Web Researcher agent for the LastFirst reading app. You have built-in web search capability and the ingest_url tool.{pref_context}\n\n"
+            "WORKFLOW:\n"
+            "1. Use web search to discover relevant content URLs\n"
+            "2. For each promising URL (top 3-5), call ingest_url to scrape it and get real metadata (word count, reading time, cover image, author)\n"
+            "3. If ingest_url fails for a URL, include the finding with whatever metadata you have from web search, and infer what you can\n"
+            "4. Return findings as a JSON array\n\n"
+            "Each finding:\n"
+            '{"source":"web","content_id":"uuid from ingest_url or null","url":"...","title":"...","author":"...",'
+            '"summary":"2-3 sentence summary","word_count":1234,"estimated_read_minutes":5,'
+            '"file_type":"web|pdf|epub","availability":"full_text|external_purchase|paywalled",'
+            '"image_url":"cover/preview image URL or null",'
+            '"relevance_note":"why this is relevant","confidence":0.0-1.0}\n\n'
+            "Prioritize quality over quantity. Scrape 3-5 best URLs rather than many."
         )
     return CURATOR_SYSTEM_PROMPT
 
@@ -178,7 +197,7 @@ class CuratorChatService:
         step_complete_msgs = ["Search complete", "Evaluation complete", "Curation complete"]
         tool_step_map = {
             "search_content": 0,
-            "get_content_details": 1, "fetch_url": 1,
+            "get_content_details": 1,
         }
 
         for _ in range(10):
@@ -481,11 +500,12 @@ Given findings from multiple research agents, create a final curated list:
 2. Rank by relevance to the user's original query and quality
 3. Select the top 5-10 most relevant items
 4. Generate a personalized agent_note for each explaining why it's recommended
-5. Write a conversational summary of what you found
+5. Write a brief conversational summary (2-4 sentences) of what you found -- do NOT list each item in detail
+6. Pass through all metadata from findings including word_count, estimated_read_minutes, file_type, availability, and image_url
 
 Respond with JSON:
 {
-  "summary": "Conversational response to the user about what you found",
+  "summary": "Brief conversational overview of what you found and why (2-4 sentences)",
   "items": [
     {
       "content_id": "uuid or null",
@@ -493,6 +513,11 @@ Respond with JSON:
       "external_title": "title",
       "external_author": "author",
       "external_summary": "brief summary",
+      "external_word_count": 1234,
+      "external_estimated_read_minutes": 5,
+      "external_file_type": "web|pdf|epub",
+      "external_availability": "full_text|external_purchase|paywalled",
+      "external_image_url": "image URL or null",
       "agent_note": "personalized recommendation note",
       "item_type": "book|article|paper|content|external_link",
       "confidence": 0.9
@@ -530,6 +555,11 @@ Respond with JSON:
                         "external_title": f.title,
                         "external_author": f.author,
                         "external_summary": f.summary,
+                        "external_word_count": f.word_count,
+                        "external_estimated_read_minutes": f.estimated_read_minutes,
+                        "external_file_type": f.file_type,
+                        "external_availability": f.availability,
+                        "external_image_url": f.image_url,
                         "agent_note": f.relevance_note,
                         "item_type": "content" if f.source == "library" else "external_link",
                     }
@@ -591,7 +621,11 @@ Respond with JSON:
             "item_type": input_data.get("item_type", "content"),
             "position": existing_items,
         }
-        for field in ("content_id", "external_url", "external_title", "external_author", "external_summary", "agent_note"):
+        for field in (
+            "content_id", "external_url", "external_title", "external_author", "external_summary", "agent_note",
+            "external_word_count", "external_estimated_read_minutes", "external_file_type",
+            "external_availability", "external_image_url",
+        ):
             if input_data.get(field):
                 item[field] = input_data[field]
 
@@ -617,7 +651,6 @@ Respond with JSON:
     def _tool_display_name(name: str) -> str:
         names = {
             "search_content": "Searching library",
-            "fetch_url": "Reading page",
             "get_content_details": "Getting details",
             "get_user_reading_history": "Reviewing reading history",
             "create_curation_item": "Adding to curation",

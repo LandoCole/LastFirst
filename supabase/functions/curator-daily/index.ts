@@ -199,7 +199,7 @@ async function generateDailyCuration(
 
   // Build tools subset for daily curation
   const tools = TOOL_DEFINITIONS.filter((t) =>
-    ["search_content", "fetch_url", "get_user_reading_history", "get_content_details"].includes(t.name)
+    ["search_content", "get_user_reading_history", "get_content_details"].includes(t.name)
   );
 
   const messages: { role: string; content: unknown }[] = [

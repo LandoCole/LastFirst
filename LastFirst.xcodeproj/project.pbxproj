@@ -84,6 +84,7 @@
 		CB03F2A3B4C5D6E7F8091A03 /* CurationItemDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA03F2A3B4C5D6E7F8091A03 /* CurationItemDetailSheet.swift */; };
 		CC01ADD000000001 /* AddContentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC02ADD000000002 /* AddContentSheet.swift */; };
 		CC08000000000008 /* CurationCardColorCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD08000000000008 /* CurationCardColorCache.swift */; };
+		CC09000000000001 /* CurationItemCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD09000000000001 /* CurationItemCache.swift */; };
 		D2A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A1B2C3D4E5F60718293A4B /* DocumentStoreActor.swift */; };
 		D2B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1B1C2D3E4F5061728394A5B /* ResourceCacheActor.swift */; };
 		D2C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1C1D2E3F4A5061728394A5C /* ParsingCoordinatorActor.swift */; };
@@ -108,6 +109,7 @@
 		E1000004 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000004 /* AuthView.swift */; };
 		E1000005 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2000005 /* AccountView.swift */; };
 		E1000006 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = E3000001 /* Supabase */; };
+		E1000007 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = E3000002 /* MarkdownUI */; };
 		E6B2C3D4F5061728394A5B6C /* SummarizationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506718293A4B5 /* SummarizationSheet.swift */; };
 		EA07D4E60B430898A5166873 /* CatalogCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F4237EB4C8C567E698046E /* CatalogCoverView.swift */; };
 		EE09000000000009 /* CurationPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF09000000000009 /* CurationPreviewSheet.swift */; };
@@ -214,6 +216,7 @@
 		D9DC6D992EF31B637ED9502C /* ReadingMetricsSyncService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadingMetricsSyncService.swift; sourceTree = "<group>"; };
 		DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookCoverRibbon.swift; sourceTree = "<group>"; };
 		DD08000000000008 /* CurationCardColorCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationCardColorCache.swift; sourceTree = "<group>"; };
+		DD09000000000001 /* CurationItemCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationItemCache.swift; sourceTree = "<group>"; };
 		E1B79FE2F0FCDEA03372EDB9 /* BookPreviewSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookPreviewSheet.swift; sourceTree = "<group>"; };
 		E2000001 /* SupabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseManager.swift; sourceTree = "<group>"; };
 		E2000002 /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
@@ -248,6 +251,7 @@
 				C101B2C3D4E5061728394A60 /* Readability in Frameworks */,
 				C102C3D4E5F6061728394A61 /* ReadabilityUI in Frameworks */,
 				E1000006 /* Supabase in Frameworks */,
+				E1000007 /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -419,6 +423,7 @@
 				38C51A56B15550EF357661B0 /* ReadingMetricsTracker.swift */,
 				D9DC6D992EF31B637ED9502C /* ReadingMetricsSyncService.swift */,
 				DD08000000000008 /* CurationCardColorCache.swift */,
+				DD09000000000001 /* CurationItemCache.swift */,
 				F9A200000000000000000002 /* TextVariantStoreActor.swift */,
 				F9A200000000000000000003 /* TextVariantService.swift */,
 			);
@@ -491,6 +496,7 @@
 				C0D1E2F3A4B5061728394A5D /* Readability */,
 				C0E1F2A3B4C5061728394A5E /* ReadabilityUI */,
 				E3000001 /* Supabase */,
+				E3000002 /* MarkdownUI */,
 			);
 			productName = LastFirst;
 			productReference = A2000000 /* LastFirst.app */;
@@ -524,6 +530,7 @@
 				C0A1B2C3D4E5F60718293A4B /* XCRemoteSwiftPackageReference "EPUBKit" */,
 				C0B1C2D3E4F5061728394A5B /* XCRemoteSwiftPackageReference "swift-readability" */,
 				E4000001 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				E4000002 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 			);
 			productRefGroup = A4000010 /* Products */;
 			projectDirPath = "";
@@ -654,6 +661,7 @@
 				BB06000000000006 /* CurationFilterBar.swift in Sources */,
 				EE09000000000009 /* CurationPreviewSheet.swift in Sources */,
 				CC08000000000008 /* CurationCardColorCache.swift in Sources */,
+				CC09000000000001 /* CurationItemCache.swift in Sources */,
 				F9B200000000000000000001 /* TextVariant.swift in Sources */,
 				F9B200000000000000000002 /* TextVariantStoreActor.swift in Sources */,
 				F9B200000000000000000003 /* TextVariantService.swift in Sources */,
@@ -904,6 +912,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		E4000002 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -926,6 +942,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E4000001 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		E3000002 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E4000002 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -2,14 +2,14 @@ import SwiftUI
 
 struct CurationCardStack: View {
     let items: [CurationItem]
-    @Binding var selectedDetailItem: CurationItem?
+    var onSelectItem: ((CurationItem) -> Void)?
 
     var body: some View {
         TabView {
             ForEach(items) { item in
                 curationCard(item)
                     .onTapGesture {
-                        selectedDetailItem = item
+                        onSelectItem?(item)
                     }
             }
         }
@@ -69,10 +69,7 @@ struct CurationCardStack: View {
     }
 
     private func coverURL(for item: CurationItem) -> URL? {
-        if let urlString = item.content?.coverUrl {
-            return URL(string: urlString)
-        }
-        return nil
+        item.displayImageUrl
     }
 
     private func coverIcon(for item: CurationItem) -> String {

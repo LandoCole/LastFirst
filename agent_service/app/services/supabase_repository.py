@@ -414,6 +414,15 @@ class SupabaseRepository:
                 row["external_author"] = item["external_author"]
             if item.get("external_summary"):
                 row["external_summary"] = item["external_summary"]
+            for field in (
+                "external_word_count",
+                "external_estimated_read_minutes",
+                "external_file_type",
+                "external_availability",
+                "external_image_url",
+            ):
+                if item.get(field):
+                    row[field] = item[field]
             payload.append(row)
 
         if not payload:
@@ -585,30 +594,31 @@ class SupabaseRepository:
         markdown: str,
         html: str,
         metadata: dict[str, Any],
+        cover_url: str | None = None,
     ) -> dict[str, Any]:
         word_count = len([word for word in markdown.split() if word])
         estimated_read_minutes = max(1, round(word_count / 238))
         file_type = "pdf" if url.lower().endswith(".pdf") else "web"
+        row_data: dict[str, Any] = {
+            "source_type": "web",
+            "source_url": url,
+            "title": title,
+            "author": author,
+            "summary": markdown[:500],
+            "body_text": markdown,
+            "body_html": html,
+            "language": metadata.get("language") or "en",
+            "word_count": word_count,
+            "estimated_read_minutes": estimated_read_minutes,
+            "file_type": file_type,
+            "is_available": True,
+            "metadata": metadata,
+        }
+        if cover_url:
+            row_data["cover_url"] = cover_url
         response = (
             self._client.table("content")
-            .upsert(
-                {
-                    "source_type": "web",
-                    "source_url": url,
-                    "title": title,
-                    "author": author,
-                    "summary": markdown[:500],
-                    "body_text": markdown,
-                    "body_html": html,
-                    "language": metadata.get("language") or "en",
-                    "word_count": word_count,
-                    "estimated_read_minutes": estimated_read_minutes,
-                    "file_type": file_type,
-                    "is_available": True,
-                    "metadata": metadata,
-                },
-                on_conflict="source_url",
-            )
+            .upsert(row_data, on_conflict="source_url")
             .execute()
         )
         rows = response.data or []

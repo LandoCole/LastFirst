@@ -144,6 +144,10 @@ You have access to tools to search the internal library, fetch URLs, and add ite
 
 When you find relevant content, use create_curation_item to add it to the curation with a personalized agent_note explaining why you're recommending it.
 
+When you find content via web search, use ingest_url to scrape the URL for real metadata (word count, reading time, cover image). Pass enriched metadata when calling create_curation_item: external_word_count, external_estimated_read_minutes, external_file_type, external_availability, external_image_url.
+
+Your chat response should be a brief research summary (2-4 sentences) about what you found and why these items are relevant. Do NOT list each item in detail -- the structured content cards will display that.
+
 Be conversational but efficient. Always search before recommending. Prefer library content when available, supplement with web finds.`;
 
 const CLASSIFIER_PROMPT = `You classify user queries for a reading curation agent. Respond with ONLY valid JSON.
@@ -181,11 +185,18 @@ For each relevant item found, include it in your findings. Try at least 2-3 diff
 Each finding: {"source":"library","content_id":"uuid","title":"...","author":"...","summary":"...","relevance_note":"why this is relevant","confidence":0.0-1.0}`;
 
     case "web_researcher":
-      return `You are a Web Researcher agent for the LastFirst reading app. You have built-in web search capability to find books, articles, papers, and reading material that aren't in the internal library.${prefContext}
+      return `You are a Web Researcher agent for the LastFirst reading app. You have built-in web search capability and the ingest_url tool.${prefContext}
 
-Use multiple search queries with different angles. For promising results, use the fetch_url tool to get more details. Return findings as a JSON array.
+WORKFLOW:
+1. Use web search to discover relevant content URLs
+2. For each promising URL (top 3-5), call ingest_url to scrape it and get real metadata (word count, reading time, cover image, author)
+3. If ingest_url fails for a URL, include the finding with whatever metadata you have from web search, and infer what you can
+4. Return findings as a JSON array
 
-Each finding: {"source":"web","url":"...","title":"...","author":"...","summary":"...","relevance_note":"why this is relevant","confidence":0.0-1.0}`;
+Each finding:
+{"source":"web","content_id":"uuid from ingest_url or null","url":"...","title":"...","author":"...","summary":"2-3 sentence summary","word_count":1234,"estimated_read_minutes":5,"file_type":"web|pdf|epub","availability":"full_text|external_purchase|paywalled","image_url":"cover/preview image URL or null","relevance_note":"why this is relevant","confidence":0.0-1.0}
+
+Prioritize quality over quantity. Scrape 3-5 best URLs rather than many.`;
 
     default:
       return CURATOR_SYSTEM_PROMPT;
@@ -473,27 +484,6 @@ async function runInlineAgentLoop(
 ): Promise<{ response: string; itemsAdded: number }> {
   const provider = resolveProvider(body.model ?? "claude");
   const modelId = resolveModelId(body.model ?? "claude", provider);
-  const stepStartMessages = [
-    "Searching for relevant content...",
-    "Reviewing promising matches...",
-    "Adding recommendations to your curation...",
-  ];
-  const stepCompleteMessages = [
-    "Search complete",
-    "Evaluation complete",
-    "Curation complete",
-  ];
-
-  // Build plan
-  await emitStatus(supabase, curationId, {
-    type: "plan",
-    plan: [
-      { label: "Search", description: "Looking for relevant content" },
-      { label: "Evaluate", description: "Reviewing and selecting the best matches" },
-      { label: "Curate", description: "Adding items with personalized notes" },
-    ],
-  });
-
   const messages: { role: string; content: unknown }[] = history.map((m) => ({
     role: m.role,
     content: m.content,
@@ -501,8 +491,22 @@ async function runInlineAgentLoop(
 
   let itemsAdded = 0;
   const maxIterations = 10;
-  let activeStepIndex: number | null = null;
-  const completedSteps = new Set<number>();
+  // Track dynamically created plan steps by tool name
+  const emittedSteps = new Map<string, number>(); // tool category -> stepIndex
+  let nextStepIndex = 0;
+
+  const toolToStep: Record<string, { label: string; description: string }> = {
+    search_content: { label: "Searching library", description: "Looking for relevant content in library" },
+    get_content_details: { label: "Getting details", description: "Reviewing content details" },
+    get_user_reading_history: { label: "Reviewing history", description: "Analyzing your reading history" },
+    create_curation_item: { label: "Adding to curation", description: "Adding recommended items" },
+    ingest_url: { label: "Ingesting content", description: "Importing content into library" },
+  };
+
+  function getToolCategory(toolName: string): string {
+    if (toolName === "get_content_details") return "evaluate";
+    return toolName;
+  }
 
   for (let i = 0; i < maxIterations; i++) {
     const result = await callLLM(
@@ -516,11 +520,12 @@ async function runInlineAgentLoop(
     );
 
     if (result.toolCalls.length === 0) {
-      if (activeStepIndex !== null && !completedSteps.has(activeStepIndex)) {
+      // Complete any active steps
+      for (const [, stepIndex] of emittedSteps) {
         await emitStatus(supabase, curationId, {
           type: "step_complete",
-          stepIndex: activeStepIndex,
-          message: stepCompleteMessages[activeStepIndex] ?? "Step complete",
+          stepIndex,
+          message: "Done",
         });
       }
       return { response: result.content, itemsAdded };
@@ -533,29 +538,33 @@ async function runInlineAgentLoop(
     });
 
     for (const tc of result.toolCalls) {
-      const stepIndex = tc.name === "search_content" ? 0
-        : tc.name === "get_content_details" || tc.name === "fetch_url" ? 1 : 2;
+      const category = getToolCategory(tc.name);
+      const stepDef = toolToStep[tc.name] ?? { label: toolDisplayName(tc.name), description: tc.name };
 
-      if (activeStepIndex !== stepIndex) {
-        if (activeStepIndex !== null && !completedSteps.has(activeStepIndex)) {
-          await emitStatus(supabase, curationId, {
-            type: "step_complete",
-            stepIndex: activeStepIndex,
-            message: stepCompleteMessages[activeStepIndex] ?? "Step complete",
-          });
-          completedSteps.add(activeStepIndex);
-        }
+      // Emit a new plan step the first time we see this tool category
+      if (!emittedSteps.has(category)) {
+        const stepIndex = nextStepIndex++;
+        emittedSteps.set(category, stepIndex);
 
-        if (!completedSteps.has(stepIndex)) {
-          await emitStatus(supabase, curationId, {
-            type: "step_start",
-            stepIndex,
-            message: stepStartMessages[stepIndex] ?? "Working...",
-          });
-        }
+        // Emit plan step dynamically
+        await emitStatus(supabase, curationId, {
+          type: "plan",
+          plan: Array.from(emittedSteps.entries()).map(([cat, _idx]) => {
+            const def = cat === "evaluate"
+              ? { label: "Evaluating", description: "Reviewing and selecting the best matches" }
+              : (toolToStep[cat] ?? { label: cat, description: cat });
+            return { label: def.label, description: def.description };
+          }),
+        });
 
-        activeStepIndex = stepIndex;
+        await emitStatus(supabase, curationId, {
+          type: "step_start",
+          stepIndex,
+          message: stepDef.label,
+        });
       }
+
+      const stepIndex = emittedSteps.get(category)!;
 
       await emitStatus(supabase, curationId, {
         type: "step_progress",
@@ -570,7 +579,7 @@ async function runInlineAgentLoop(
         itemsAdded++;
         await emitStatus(supabase, curationId, {
           type: "finding",
-          stepIndex: 2,
+          stepIndex,
           finding: `Added: ${(tc.input as Record<string, string>).external_title ?? "library item"}`,
         });
       }
@@ -609,11 +618,12 @@ async function runInlineAgentLoop(
     }
   }
 
-  if (activeStepIndex !== null && !completedSteps.has(activeStepIndex)) {
+  // Complete any remaining active steps
+  for (const [, stepIndex] of emittedSteps) {
     await emitStatus(supabase, curationId, {
       type: "step_complete",
-      stepIndex: activeStepIndex,
-      message: stepCompleteMessages[activeStepIndex] ?? "Step complete",
+      stepIndex,
+      message: "Done",
     });
   }
 
@@ -836,11 +846,12 @@ Given findings from multiple research agents, create a final curated list:
 2. Rank by relevance to the user's original query and quality
 3. Select the top 5-10 most relevant items
 4. Generate a personalized agent_note for each explaining why it's recommended
-5. Write a conversational summary of what you found
+5. Write a brief conversational summary (2-4 sentences) of what you found -- do NOT list each item in detail
+6. Pass through all metadata from findings including word_count, estimated_read_minutes, file_type, availability, and image_url
 
 Respond with JSON:
 {
-  "summary": "Conversational response to the user about what you found",
+  "summary": "Brief conversational overview of what you found and why (2-4 sentences)",
   "items": [
     {
       "content_id": "uuid or null",
@@ -848,6 +859,11 @@ Respond with JSON:
       "external_title": "title",
       "external_author": "author",
       "external_summary": "brief summary",
+      "external_word_count": 1234,
+      "external_estimated_read_minutes": 5,
+      "external_file_type": "web|pdf|epub",
+      "external_availability": "full_text|external_purchase|paywalled",
+      "external_image_url": "image URL or null",
       "agent_note": "personalized recommendation note",
       "item_type": "book|article|paper|content|external_link",
       "confidence": 0.9
@@ -891,6 +907,11 @@ Respond with JSON:
           external_title: f.title,
           external_author: f.author,
           external_summary: f.summary,
+          external_word_count: f.word_count ?? null,
+          external_estimated_read_minutes: f.estimated_read_minutes ?? null,
+          external_file_type: f.file_type ?? null,
+          external_availability: f.availability ?? null,
+          external_image_url: f.image_url ?? null,
           agent_note: f.relevance_note,
           item_type: f.source === "library" ? "content" : "external_link",
         })),
@@ -912,6 +933,11 @@ Respond with JSON:
     if (item.external_title) insertData.external_title = item.external_title;
     if (item.external_author) insertData.external_author = item.external_author;
     if (item.external_summary) insertData.external_summary = item.external_summary;
+    if (item.external_word_count) insertData.external_word_count = item.external_word_count;
+    if (item.external_estimated_read_minutes) insertData.external_estimated_read_minutes = item.external_estimated_read_minutes;
+    if (item.external_file_type) insertData.external_file_type = item.external_file_type;
+    if (item.external_availability) insertData.external_availability = item.external_availability;
+    if (item.external_image_url) insertData.external_image_url = item.external_image_url;
 
     await supabase.from("curation_items").insert(insertData);
   }

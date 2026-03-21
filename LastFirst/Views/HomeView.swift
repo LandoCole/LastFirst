@@ -11,7 +11,6 @@ struct HomeView: View {
     @State private var selectedDate = Date()
     @State private var statsVM: ReadingStatsViewModel?
     @State private var timelineVM: HomeTimelineViewModel?
-    @State private var selectedCurationItem: CurationItem?
     @State private var curationPreviewContext: CurationPreviewContext?
     @State private var showAccount: Bool = false
     @Namespace private var homeGlassNamespace
@@ -20,12 +19,8 @@ struct HomeView: View {
     @State private var currentDayPage: UUID?
     @State private var currentSectionTitle: String = "Today's Curation"
     @State private var hasScrolledToToday = false
-    @State private var isAnchoringToToday = false
-    private let statsPageId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-
-    // Cover carousel state
     @State private var carouselCenters: [UUID: Int] = [:]
-    @GestureState private var carouselDragOffset: CGFloat = 0
+    private let statsPageId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
     var scrollToTodayTrigger: Bool = false
     var onNavigateToCurator: (() -> Void)?
@@ -53,6 +48,10 @@ struct HomeView: View {
                                         .background(Color(.systemBackground))
                                         .contentShape(Rectangle())
                                         .clipped()
+                                        .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
+                                            content.opacity(phase.isIdentity ? 1.0 : 0.85)
+                                                   .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
+                                        }
                                         .id(pendingTodayId)
                                 }
 
@@ -63,6 +62,10 @@ struct HomeView: View {
                                         .background(Color(.systemBackground))
                                         .contentShape(Rectangle())
                                         .clipped()
+                                        .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
+                                            content.opacity(phase.isIdentity ? 1.0 : 0.85)
+                                                   .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
+                                        }
                                         .id(day.id)
                                 }
                             }
@@ -75,6 +78,10 @@ struct HomeView: View {
                                     .background(Color(.systemBackground))
                                     .contentShape(Rectangle())
                                     .clipped()
+                                    .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
+                                        content.opacity(phase.isIdentity ? 1.0 : 0.85)
+                                               .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
+                                    }
                                     .id(statsPageId)
                             }
                         }
@@ -82,6 +89,7 @@ struct HomeView: View {
                     }
                     .scrollTargetBehavior(.paging)
                     .scrollPosition(id: $currentDayPage)
+                    .defaultScrollAnchor(.bottom)
                     .background(Color(.systemBackground))
                     .clipped()
                 }
@@ -113,8 +121,11 @@ struct HomeView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .onChange(of: currentDayPage) { _, newValue in
+        .onChange(of: currentDayPage) { oldValue, newValue in
             updateSectionTitle()
+            if hasScrolledToToday && oldValue != nil {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
             Task { await loadEarlierIfNeeded(for: newValue) }
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -173,9 +184,10 @@ struct HomeView: View {
         .sheet(isPresented: $showDatePicker) {
             datePickerSheet
         }
-        .sheet(item: $selectedCurationItem) { item in
-            CurationItemDetailSheet(
-                item: item,
+        .sheet(item: $curationPreviewContext) { context in
+            CurationPreviewSheet(
+                items: context.items,
+                initialIndex: context.initialIndex,
                 userId: authVM.currentUser?.id,
                 onSave: { curationItem in
                     appState.addCuratedItem(curationItem)
@@ -191,20 +203,6 @@ struct HomeView: View {
                     }
                 }
             )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $curationPreviewContext) { context in
-            CurationPreviewSheet(
-                items: context.items,
-                initialIndex: context.initialIndex,
-                onSelectItem: { item in
-                    curationPreviewContext = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        selectedCurationItem = item
-                    }
-                }
-            )
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(0)
             .presentationBackground(.clear)
@@ -217,30 +215,64 @@ struct HomeView: View {
     private func dayCurationSection(_ day: DayCuration) -> some View {
         let items = day.items
 
-        VStack(spacing: 0) {
-            if !items.isEmpty {
-                // Summary text
-                VStack(alignment: .leading, spacing: 24) {
-                    if let summary = day.curation.summary, !summary.isEmpty {
-                        Text(summary)
-                            .font(.rethinkSans(16))
-                            .foregroundStyle(.primary.opacity(0.85))
-                            .lineSpacing(6)
-                            .lineLimit(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+        if !items.isEmpty {
+            GeometryReader { geo in
+                let pages = paginateSummary(
+                    day.curation.summary ?? "",
+                    availableSize: geo.size
+                )
+                let sortedItems = items.sorted { a, b in
+                    let aHasCover = a.content?.coverUrl != nil
+                    let bHasCover = b.content?.coverUrl != nil
+                    if aHasCover != bHasCover { return aHasCover }
+                    return a.position < b.position
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
 
-                Spacer(minLength: 20)
-
-                // 3-item focused cover carousel
-                curationCoverCarousel(for: items, dayId: day.id)
-
-                Spacer().frame(height: 100)
-            } else {
-                // Empty curation placeholder
+                if pages.count <= 1 {
+                    // Single page — no horizontal scroll needed
+                    summaryPage(
+                        text: pages.first ?? "",
+                        pageIndex: 0,
+                        totalPages: 1,
+                        items: sortedItems,
+                        dayId: day.id,
+                        isToday: day.isToday,
+                        availableHeight: geo.size.height
+                    )
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 0) {
+                            ForEach(Array(pages.enumerated()), id: \.offset) { index, text in
+                                summaryPage(
+                                    text: text,
+                                    pageIndex: index,
+                                    totalPages: pages.count,
+                                    items: sortedItems,
+                                    dayId: day.id,
+                                    isToday: day.isToday,
+                                    availableHeight: geo.size.height
+                                )
+                                .containerRelativeFrame(.horizontal)
+                            }
+                        }
+                        .scrollTargetLayout()
+                    }
+                    .scrollTargetBehavior(.viewAligned)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .clipped()
+            .onAppear {
+                if let vm = timelineVM,
+                   hasScrolledToToday,
+                   currentDayPage == day.id,
+                   day.id == vm.earliestLoadedDayId {
+                    Task { await vm.loadEarlier() }
+                }
+            }
+        } else {
+            VStack {
                 Spacer()
                 HStack(spacing: 12) {
                     Image(systemName: "sparkles")
@@ -252,135 +284,268 @@ struct HomeView: View {
                 }
                 Spacer()
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .clipped()
+            .onAppear {
+                if let vm = timelineVM,
+                   hasScrolledToToday,
+                   currentDayPage == day.id,
+                   day.id == vm.earliestLoadedDayId {
+                    Task { await vm.loadEarlier() }
+                }
+            }
+        }
+    }
+
+    // MARK: - Summary Page
+
+    private func summaryPage(
+        text: String,
+        pageIndex: Int,
+        totalPages: Int,
+        items: [CurationItem],
+        dayId: UUID,
+        isToday: Bool,
+        availableHeight: CGFloat
+    ) -> some View {
+        VStack(spacing: 0) {
+            // Summary text — fills available space
+            if !text.isEmpty {
+                ScrollView(.vertical, showsIndicators: false) {
+                    Text(text)
+                        .font(.rethinkSans(16))
+                        .foregroundStyle(.primary.opacity(0.85))
+                        .lineSpacing(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 16)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
+
+            Spacer(minLength: 8)
+
+            // Page indicator dots (only if multiple pages)
+            if totalPages > 1 {
+                pageIndicatorDots(current: pageIndex, total: totalPages)
+                    .padding(.bottom, 8)
+            }
+
+            // Mini book preview strip
+            miniBookPreview(items: items, dayId: dayId)
+                .padding(.bottom, 8)
+
+            Spacer().frame(height: availableHeight * 0.10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Page Indicator Dots
+
+    private func pageIndicatorDots(current: Int, total: Int) -> some View {
+        HStack(spacing: 6) {
+            ForEach(0..<total, id: \.self) { i in
+                Circle()
+                    .fill(i == current ? Color.primary : Color.secondary.opacity(0.3))
+                    .frame(width: 6, height: 6)
+            }
+        }
+    }
+
+    // MARK: - Mini Book Preview Strip
+
+    private func miniBookPreview(items: [CurationItem], dayId: UUID) -> some View {
+        let centerIndex = carouselCenters[dayId] ?? 0
+        let clamped = min(max(centerIndex, 0), items.count - 1)
+        let coverWidth: CGFloat = 80
+        let coverHeight: CGFloat = 118
+        let coverOffset: CGFloat = 106
+
+        return ZStack {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                let pos = index - clamped
+                if abs(pos) <= 1 {
+                    coverThumbnail(item: item, width: coverWidth, height: coverHeight)
+                        .scaleEffect(pos == 0 ? 1.0 : 0.75)
+                        .opacity(pos == 0 ? 1.0 : 0.5)
+                        .offset(x: CGFloat(pos) * coverOffset)
+                        .zIndex(pos == 0 ? 1 : 0)
+                        .onTapGesture {
+                            if pos == 0 {
+                                curationPreviewContext = CurationPreviewContext(
+                                    items: items,
+                                    initialIndex: clamped
+                                )
+                            } else {
+                                shiftCarouselCenter(for: dayId, itemCount: items.count, to: index)
+                            }
+                        }
+                }
+            }
+        }
+        .frame(height: coverHeight)
         .contentShape(Rectangle())
-        .clipped()
-        .onAppear {
-            // Load earlier pages when first page appears
-            if let vm = timelineVM,
-               hasScrolledToToday,
-               currentDayPage == day.id,
-               day.id == vm.earliestLoadedDayId {
-                Task { await vm.loadEarlier() }
-            }
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    let horizontalTranslation = value.translation.width
+                    let verticalTranslation = value.translation.height
+                    guard abs(horizontalTranslation) > abs(verticalTranslation),
+                          abs(horizontalTranslation) > 40 else { return }
+                    let nextIndex = clamped + (horizontalTranslation < 0 ? 1 : -1)
+                    shiftCarouselCenter(for: dayId, itemCount: items.count, to: nextIndex)
+                }
+        )
+        .animation(.easeInOut(duration: 0.3), value: carouselCenters[dayId])
+    }
+
+    private func shiftCarouselCenter(for dayId: UUID, itemCount: Int, to proposedIndex: Int) {
+        guard itemCount > 0 else { return }
+        let currentIndex = min(max(carouselCenters[dayId] ?? 0, 0), itemCount - 1)
+        let nextIndex = min(max(proposedIndex, 0), itemCount - 1)
+        guard nextIndex != currentIndex else { return }
+
+        withAnimation(.easeInOut(duration: 0.3)) {
+            carouselCenters[dayId] = nextIndex
         }
     }
 
-    // MARK: - 3-Item Focused Cover Carousel
+    // MARK: - Cover Thumbnail
 
-    @ViewBuilder
-    private func curationCoverCarousel(for items: [CurationItem], dayId: UUID) -> some View {
-        let sorted = items.sorted { a, b in
-            let aHasCover = a.content?.coverUrl != nil
-            let bHasCover = b.content?.coverUrl != nil
-            if aHasCover != bHasCover { return aHasCover }
-            return a.position < b.position
-        }
-
-        if sorted.isEmpty { EmptyView() }
-        else {
-            let centerIdx = (carouselCenters[dayId] ?? 0) % sorted.count
-            let visibleSlots: [(pos: Int, item: CurationItem, idx: Int)] = {
-                var slots: [(Int, CurationItem, Int)] = []
-                slots.append((0, sorted[centerIdx], centerIdx))
-                if sorted.count > 1 {
-                    let leftIdx = (centerIdx - 1 + sorted.count) % sorted.count
-                    slots.append((-1, sorted[leftIdx], leftIdx))
-                }
-                if sorted.count > 2 {
-                    let rightIdx = (centerIdx + 1) % sorted.count
-                    slots.append((1, sorted[rightIdx], rightIdx))
-                }
-                return slots
-            }()
-
-            VStack(spacing: 0) {
-                ZStack {
-                    ForEach(visibleSlots, id: \.item.id) { pos, item, idx in
-                        coverThumbnail(item: item, width: 51, height: 75)
-                            .scaleEffect(pos == 0 ? 1.0 : 0.75)
-                            .opacity(pos == 0 ? 1.0 : 0.5)
-                            .offset(x: CGFloat(pos) * 70)
-                            .zIndex(pos == 0 ? 1 : 0)
-                            .onTapGesture {
-                                if pos == 0 {
-                                    curationPreviewContext = CurationPreviewContext(
-                                        items: sorted,
-                                        initialIndex: centerIdx
-                                    )
-                                } else {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        carouselCenters[dayId] = idx
-                                    }
-                                }
-                            }
+    private func coverThumbnail(item: CurationItem, width: CGFloat = 80, height: CGFloat = 118) -> some View {
+        Group {
+            if let urlString = item.content?.coverUrl, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: width, height: height)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    case .failure:
+                        fallbackCover(title: item.displayTitle, width: width, height: height)
+                    default:
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.secondary.opacity(0.1))
+                            .frame(width: width, height: height)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 80)
-                .contentShape(Rectangle())
-                .animation(.easeInOut(duration: 0.3), value: carouselCenters[dayId])
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 15, coordinateSpace: .local)
-                        .updating($carouselDragOffset) { value, state, _ in
-                            if abs(value.translation.width) > abs(value.translation.height) {
-                                state = value.translation.width
-                            }
-                        }
-                        .onEnded { value in
-                            guard sorted.count > 1 else { return }
-                            guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                            guard abs(value.translation.width) > 30 else { return }
-                            let current = carouselCenters[dayId] ?? 0
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                if value.translation.width < 0 {
-                                    carouselCenters[dayId] = (current + 1) % sorted.count
-                                } else {
-                                    carouselCenters[dayId] = (current - 1 + sorted.count) % sorted.count
-                                }
-                            }
-                        }
-                )
-                .onAppear {
-                    if carouselCenters[dayId] == nil {
-                        carouselCenters[dayId] = 0
-                    }
-                }
+            } else {
+                fallbackCover(title: item.displayTitle, width: width, height: height)
             }
         }
+        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
     }
 
-    @ViewBuilder
-    private func coverThumbnail(item: CurationItem, width: CGFloat, height: CGFloat) -> some View {
-        if let urlString = item.content?.coverUrl, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: width, height: height)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                case .failure:
-                    fallbackCover(title: item.displayTitle, width: width, height: height)
-                default:
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: width, height: height)
-                }
-            }
-            .id(urlString)
-        } else {
-            fallbackCover(title: item.displayTitle, width: width, height: height)
-        }
-    }
-
-    private func fallbackCover(title: String, width: CGFloat, height: CGFloat) -> some View {
+    private func fallbackCover(title: String, width: CGFloat = 80, height: CGFloat = 118) -> some View {
         let colors = Color.fallbackCoverPalette.map { Color(hex: $0) }
         let index = abs(title.hashValue) % colors.count
         return RoundedRectangle(cornerRadius: 4)
             .fill(colors[index])
             .frame(width: width, height: height)
+            .overlay {
+                Text(title)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 6)
+            }
+    }
+
+    // MARK: - Summary Pagination
+
+    private func paginateSummary(_ text: String, availableSize: CGSize) -> [String] {
+        guard !text.isEmpty else { return [""] }
+
+        let font = UIFont(name: "RethinkSans-Regular", size: 16) ?? UIFont.systemFont(ofSize: 16)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 6
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraphStyle
+        ]
+
+        let constraintWidth = availableSize.width - 48 // 24pt horizontal padding each side
+
+        let fullSize = (text as NSString).boundingRect(
+            with: CGSize(width: constraintWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attributes,
+            context: nil
+        )
+
+        let reservedHeight: CGFloat = 208
+        let availableTextHeight = availableSize.height - reservedHeight
+
+        guard availableTextHeight > 60 else { return [text] }
+
+        // If text fits in one page, return as-is
+        if fullSize.height <= availableTextHeight {
+            return [text]
+        }
+
+        // Split at sentence boundaries
+        let sentences = splitIntoSentences(text)
+        var pages: [String] = []
+        var currentPage = ""
+
+        for sentence in sentences {
+            let candidate = currentPage.isEmpty ? sentence : currentPage + sentence
+            let candidateSize = (candidate as NSString).boundingRect(
+                with: CGSize(width: constraintWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: attributes,
+                context: nil
+            )
+
+            if candidateSize.height > availableTextHeight && !currentPage.isEmpty {
+                pages.append(currentPage.trimmingCharacters(in: .whitespacesAndNewlines))
+                currentPage = sentence
+            } else {
+                currentPage = candidate
+            }
+        }
+
+        if !currentPage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            pages.append(currentPage.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+
+        return pages.isEmpty ? [text] : pages
+    }
+
+    private func splitIntoSentences(_ text: String) -> [String] {
+        var sentences: [String] = []
+        var current = ""
+        let chars = Array(text)
+        var i = 0
+
+        while i < chars.count {
+            current.append(chars[i])
+            if chars[i] == "." || chars[i] == "!" || chars[i] == "?" {
+                // Check if followed by space/newline or end of string
+                let next = i + 1
+                if next >= chars.count || chars[next] == " " || chars[next] == "\n" {
+                    // Include trailing space/newline
+                    if next < chars.count && (chars[next] == " " || chars[next] == "\n") {
+                        current.append(chars[next])
+                        i += 1
+                    }
+                    sentences.append(current)
+                    current = ""
+                }
+            }
+            i += 1
+        }
+
+        if !current.isEmpty {
+            sentences.append(current)
+        }
+
+        return sentences
     }
 
     // MARK: - Section Title Tracking
@@ -549,64 +714,34 @@ struct HomeView: View {
             return
         }
         guard force || !hasScrolledToToday || currentDayPage != todayId else { return }
-        guard !isAnchoringToToday else { return }
 
         await MainActor.run {
-            isAnchoringToToday = true
-        }
-        defer {
-            Task { @MainActor in
-                isAnchoringToToday = false
-            }
-        }
-
-        for attempt in 0..<3 {
-            await MainActor.run {
-                if animated && attempt == 0 {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        currentDayPage = todayId
-                    }
-                } else {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.25)) {
                     currentDayPage = todayId
                 }
-                hasScrolledToToday = true
-                updateSectionTitle()
+            } else {
+                currentDayPage = todayId
             }
-
-            if attempt < 2 {
-                try? await Task.sleep(nanoseconds: 80_000_000)
-            }
+            hasScrolledToToday = true
+            updateSectionTitle()
         }
     }
 
     private func anchorToStatsPageIfNeeded(animated: Bool = false, force: Bool = false) async {
         guard shouldShowStatsPage, !hasHomeTimelineContent else { return }
         guard force || currentDayPage != statsPageId else { return }
-        await MainActor.run {
-            isAnchoringToToday = true
-        }
-        defer {
-            Task { @MainActor in
-                isAnchoringToToday = false
-            }
-        }
 
-        for attempt in 0..<3 {
-            await MainActor.run {
-                if animated && attempt == 0 {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        currentDayPage = statsPageId
-                    }
-                } else {
+        await MainActor.run {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.25)) {
                     currentDayPage = statsPageId
                 }
-                hasScrolledToToday = false
-                updateSectionTitle()
+            } else {
+                currentDayPage = statsPageId
             }
-
-            if attempt < 2 {
-                try? await Task.sleep(nanoseconds: 80_000_000)
-            }
+            hasScrolledToToday = false
+            updateSectionTitle()
         }
     }
 

@@ -93,6 +93,11 @@ class Finding(BaseModel):
     url: str | None = None
     author: str | None = None
     summary: str | None = None
+    word_count: int | None = None
+    estimated_read_minutes: int | None = None
+    file_type: str | None = None
+    availability: str | None = None
+    image_url: str | None = None
 
 
 # --- Curator Chat Models ---

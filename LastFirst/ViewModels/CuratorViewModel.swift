@@ -254,9 +254,23 @@ class CuratorViewModel: ObservableObject {
         switch status.type {
         case .plan:
             guard let planSteps = status.plan else { return }
-            let steps = planSteps.map { CuratorPlanStep(label: $0.label, description: $0.description) }
             withAnimation(.easeOut(duration: 0.3)) {
-                researchPlan = CuratorResearchPlan(steps: steps)
+                if var plan = researchPlan {
+                    // Preserve existing step states when plan grows dynamically
+                    var updatedSteps: [CuratorPlanStep] = []
+                    for (i, stepDef) in planSteps.enumerated() {
+                        if i < plan.steps.count {
+                            updatedSteps.append(plan.steps[i])
+                        } else {
+                            updatedSteps.append(CuratorPlanStep(label: stepDef.label, description: stepDef.description))
+                        }
+                    }
+                    plan.steps = updatedSteps
+                    researchPlan = plan
+                } else {
+                    let steps = planSteps.map { CuratorPlanStep(label: $0.label, description: $0.description) }
+                    researchPlan = CuratorResearchPlan(steps: steps)
+                }
             }
 
         case .stepStart:
@@ -350,12 +364,19 @@ class CuratorViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        // Load from cache first for instant display
+        if let cached = await CurationItemCache.shared.cachedItems(forCuration: id) {
+            curationItems = cached
+            rebuildMessageItems()
+        }
+
         do {
             async let msgs = SupabaseManager.shared.fetchCurationMessages(curationId: id)
             async let items = SupabaseManager.shared.fetchCurationItems(curationId: id)
             messages = try await msgs
             curationItems = try await items
             rebuildMessageItems()
+            await CurationItemCache.shared.cache(items: curationItems, forCuration: id)
         } catch {
             self.error = error.localizedDescription
         }
@@ -389,6 +410,7 @@ class CuratorViewModel: ObservableObject {
         guard let curationId = activeCurationId else { return }
         do {
             curationItems = try await SupabaseManager.shared.fetchCurationItems(curationId: curationId)
+            await CurationItemCache.shared.cache(items: curationItems, forCuration: curationId)
         } catch {
             print("[CuratorViewModel] Failed to load items: \(error)")
         }

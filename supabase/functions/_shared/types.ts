@@ -46,6 +46,11 @@ export interface Finding {
   summary?: string;
   relevance_note: string;
   confidence: number; // 0-1
+  word_count?: number;
+  estimated_read_minutes?: number;
+  file_type?: string;
+  availability?: string;
+  image_url?: string;
 }
 
 export interface SubagentConfig {
