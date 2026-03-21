@@ -213,6 +213,9 @@ class ToolExecutor:
         except Exception as exc:
             return {"error": f"Ingest failed: {exc}"}
 
+        # Strip NULL bytes and control characters that crash lxml/readability
+        html = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", html)
+
         from readability import Document
         from markdownify import markdownify as md
 
