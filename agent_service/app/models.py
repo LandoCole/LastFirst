@@ -100,6 +100,22 @@ class Finding(BaseModel):
     image_url: str | None = None
 
 
+# --- Clarification Models ---
+
+
+class ClarificationOption(BaseModel):
+    id: str
+    label: str
+    emoji: str | None = None
+
+
+class ClarificationQuestion(BaseModel):
+    id: str
+    question: str
+    selection_type: str = "single"
+    options: list[ClarificationOption]
+
+
 # --- Curator Chat Models ---
 
 
@@ -116,12 +132,14 @@ class CuratorChatResponse(BaseModel):
     items_added: int | None = None
     complexity: str | None = None
     agent_count: int | None = None
+    clarification_questions: list[ClarificationQuestion] | None = None
 
 
 class ClassificationResult(BaseModel):
     complexity: str = "simple"
     subqueries: list[dict[str, str]] = Field(default_factory=list)
     reasoning: str = ""
+    needs_clarification: bool = False
 
 
 class SubagentResult(BaseModel):

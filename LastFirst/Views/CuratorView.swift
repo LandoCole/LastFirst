@@ -38,18 +38,18 @@ struct CuratorView: View {
         self._viewModel = StateObject(wrappedValue: CuratorViewModel(userId: userId))
     }
 
+    private var topSafeArea: CGFloat {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+            let window = windowScene.windows.first else { return 59 }
+        return window.safeAreaInsets.top
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             headerBar
                 .padding(.horizontal, 20)
-                .padding(.top, 34)
-
-            LinearGradient(
-                colors: [Color(.systemBackground), .clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 20)
+                .padding(.top, topSafeArea + 16)
 
             if viewModel.messages.isEmpty && viewModel.curationItems.isEmpty {
                 Spacer()
@@ -72,6 +72,7 @@ struct CuratorView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
         }
+        .background(Color(.systemBackground).ignoresSafeArea())
         .sheet(isPresented: $showHistory) {
             CuratorHistoryView(curations: viewModel.pastCurations) { curationId in
                 Task { await viewModel.loadCuration(id: curationId) }
@@ -193,6 +194,22 @@ struct CuratorView: View {
                         }
                     }
 
+                    // Clarification questions (shown after assistant intro)
+                    if !viewModel.clarificationQuestions.isEmpty {
+                        ClarificationQuestionsView(
+                            questions: viewModel.clarificationQuestions,
+                            selections: $viewModel.clarificationSelections,
+                            onSubmit: {
+                                Task {
+                                    await viewModel.submitClarificationSelections(model: selectedModel)
+                                }
+                            },
+                            canSubmit: viewModel.canSubmitClarification
+                        )
+                        .id("clarification")
+                        .transition(.opacity)
+                    }
+
                     if viewModel.isLoading {
                         if let plan = viewModel.researchPlan {
                             CuratorPlanView(plan: plan)
@@ -230,6 +247,13 @@ struct CuratorView: View {
                 withAnimation {
                     if viewModel.isLoading {
                         proxy.scrollTo("loading", anchor: .bottom)
+                    }
+                }
+            }
+            .onChange(of: viewModel.clarificationQuestions.count) {
+                if !viewModel.clarificationQuestions.isEmpty {
+                    withAnimation {
+                        proxy.scrollTo("clarification", anchor: .bottom)
                     }
                 }
             }
@@ -475,6 +499,14 @@ struct CuratorView: View {
             }
             .buttonStyle(.plain)
 
+            if !viewModel.clarificationQuestions.isEmpty {
+                Text("Select options above to refine your search")
+                    .font(.rethinkSans(12))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
+            } else {
+
             ZStack(alignment: .trailing) {
                 TextField("Ask Curator", text: $inputText)
                     .font(.system(size: 14))
@@ -510,6 +542,8 @@ struct CuratorView: View {
                     )
             }
             .disabled(inputText.isEmpty || viewModel.isLoading)
+
+            } // end else (not clarification)
         }
     }
 

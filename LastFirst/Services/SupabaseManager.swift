@@ -282,12 +282,14 @@ final class SupabaseManager: @unchecked Sendable {
         let itemsAdded: Int?
         let complexity: String?
         let agentCount: Int?
+        let clarificationQuestions: [ClarificationQuestion]?
 
         enum CodingKeys: String, CodingKey {
             case response, complexity
             case curationId = "curation_id"
             case itemsAdded = "items_added"
             case agentCount = "agent_count"
+            case clarificationQuestions = "clarification_questions"
         }
     }
 

@@ -37,62 +37,57 @@ struct HomeView: View {
             } else if shouldShowEmptyState {
                 emptyState
             } else {
-                GeometryReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            if let vm = timelineVM {
-                                if vm.shouldShowGeneratingTodayPage, let pendingTodayId = vm.pendingTodayCurationId {
-                                    generatingTodayPage
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: proxy.size.height)
-                                        .background(Color(.systemBackground))
-                                        .contentShape(Rectangle())
-                                        .clipped()
-                                        .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
-                                            content.opacity(phase.isIdentity ? 1.0 : 0.85)
-                                                   .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
-                                        }
-                                        .id(pendingTodayId)
-                                }
-
-                                ForEach(vm.dayCurations) { day in
-                                    dayCurationSection(day)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: proxy.size.height)
-                                        .background(Color(.systemBackground))
-                                        .contentShape(Rectangle())
-                                        .clipped()
-                                        .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
-                                            content.opacity(phase.isIdentity ? 1.0 : 0.85)
-                                                   .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
-                                        }
-                                        .id(day.id)
-                                }
-                            }
-
-                            // Stats page — scrolling down past today reveals this
-                            if shouldShowStatsPage, let statsVM {
-                                ReadingStatsPageView(statsVM: statsVM)
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        if let vm = timelineVM {
+                            if vm.shouldShowGeneratingTodayPage, let pendingTodayId = vm.pendingTodayCurationId {
+                                generatingTodayPage
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: proxy.size.height)
+                                    .containerRelativeFrame(.vertical)
                                     .background(Color(.systemBackground))
                                     .contentShape(Rectangle())
                                     .clipped()
                                     .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
                                         content.opacity(phase.isIdentity ? 1.0 : 0.85)
-                                               .scaleEffect(phase.isIdentity ? 1.0 : 0.95)
                                     }
-                                    .id(statsPageId)
+                                    .id(pendingTodayId)
+                            }
+
+                            ForEach(vm.dayCurations) { day in
+                                dayCurationSection(day)
+                                    .frame(maxWidth: .infinity)
+                                    .containerRelativeFrame(.vertical)
+                                    .background(Color(.systemBackground))
+                                    .contentShape(Rectangle())
+                                    .clipped()
+                                    .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
+                                        content.opacity(phase.isIdentity ? 1.0 : 0.85)
+                                    }
+                                    .id(day.id)
                             }
                         }
-                        .scrollTargetLayout()
+
+                        // Stats page — scrolling down past today reveals this
+                        if shouldShowStatsPage, let statsVM {
+                            ReadingStatsPageView(statsVM: statsVM)
+                                .frame(maxWidth: .infinity)
+                                .containerRelativeFrame(.vertical)
+                                .background(Color(.systemBackground))
+                                .contentShape(Rectangle())
+                                .clipped()
+                                .scrollTransition(.animated(.easeInOut(duration: 0.3))) { content, phase in
+                                    content.opacity(phase.isIdentity ? 1.0 : 0.85)
+                                }
+                                .id(statsPageId)
+                        }
                     }
-                    .scrollTargetBehavior(.paging)
-                    .scrollPosition(id: $currentDayPage)
-                    .defaultScrollAnchor(.bottom)
-                    .background(Color(.systemBackground))
-                    .clipped()
+                    .scrollTargetLayout()
                 }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentDayPage)
+                .defaultScrollAnchor(.bottom)
+                .background(Color(.systemBackground))
+                .clipped()
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -312,16 +307,13 @@ struct HomeView: View {
         VStack(spacing: 0) {
             // Summary text — fills available space
             if !text.isEmpty {
-                ScrollView(.vertical, showsIndicators: false) {
-                    Text(text)
-                        .font(.rethinkSans(16))
-                        .foregroundStyle(.primary.opacity(0.85))
-                        .lineSpacing(6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 16)
-                }
-                .scrollBounceBehavior(.basedOnSize)
+                Text(text)
+                    .font(.rethinkSans(16))
+                    .foregroundStyle(.primary.opacity(0.85))
+                    .lineSpacing(6)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
             }
 
             Spacer(minLength: 8)

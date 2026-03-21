@@ -69,6 +69,31 @@ export interface ClassificationResult {
   complexity: "simple" | "moderate" | "complex";
   subqueries: { role: string; query: string }[];
   reasoning: string;
+  needs_clarification?: boolean;
+}
+
+export interface ClarificationOption {
+  id: string;
+  label: string;
+  emoji?: string;
+}
+
+export interface ClarificationQuestion {
+  id: string;
+  question: string;
+  selection_type: "single" | "multi";
+  options: ClarificationOption[];
+}
+
+export interface ClarificationResponse {
+  __clarification_response: true;
+  original_query: string;
+  selections: {
+    question_id: string;
+    question_text: string;
+    selected_option_ids: string[];
+    selected_labels: string[];
+  }[];
 }
 
 export type LLMProvider = "anthropic" | "openai" | "google";

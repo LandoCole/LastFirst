@@ -27,6 +27,10 @@ class CuratorViewModel: ObservableObject {
     @Published var researchPlan: CuratorResearchPlan?
     /// Maps assistant message ID → items added in that response
     @Published var messageItems: [UUID: [CurationItem]] = [:]
+    // Clarification state
+    @Published var clarificationQuestions: [ClarificationQuestion] = []
+    @Published var clarificationSelections: [String: Set<String>] = [:]
+    private var originalQueryForClarification: String?
 
     private let userId: UUID
     private var pollingTask: Task<Void, Never>?
@@ -72,7 +76,28 @@ class CuratorViewModel: ObservableObject {
             // Update curation ID (may be newly created)
             activeCurationId = response.curationId
 
-            if let directResponse = response.response {
+            // Check for clarification questions
+            if let questions = response.clarificationQuestions, !questions.isEmpty {
+                if let introText = response.response {
+                    let assistantMessage = CurationMessage(
+                        id: UUID(),
+                        curationId: response.curationId,
+                        role: "assistant",
+                        content: introText,
+                        createdAt: Date()
+                    )
+                    messages.append(assistantMessage)
+                }
+                clarificationQuestions = questions
+                originalQueryForClarification = trimmed
+                clarificationSelections = [:]
+                stopActivityPolling()
+                isLoading = false
+                statusMessage = nil
+                return
+            }
+
+            if let directResponse = response.response, response.clarificationQuestions == nil {
                 // SIMPLE: response came back inline
                 let assistantMessage = CurationMessage(
                     id: UUID(),
@@ -427,6 +452,135 @@ class CuratorViewModel: ObservableObject {
         activities = []
         researchPlan = nil
         error = nil
+        clarificationQuestions = []
+        clarificationSelections = [:]
+        originalQueryForClarification = nil
+    }
+
+    // MARK: - Clarification
+
+    var canSubmitClarification: Bool {
+        clarificationSelections.values.contains(where: { !$0.isEmpty })
+    }
+
+    func toggleClarificationOption(questionId: String, optionId: String, question: ClarificationQuestion) {
+        var selected = clarificationSelections[questionId] ?? []
+        if question.isMultiSelect {
+            if selected.contains(optionId) {
+                selected.remove(optionId)
+            } else {
+                selected.insert(optionId)
+            }
+        } else {
+            selected = [optionId]
+        }
+        clarificationSelections[questionId] = selected
+    }
+
+    func submitClarificationSelections(model: CuratorAIModel = .claude) async {
+        guard let originalQuery = originalQueryForClarification,
+              canSubmitClarification else { return }
+
+        // Build structured payload
+        var selections: [[String: Any]] = []
+        for question in clarificationQuestions {
+            let selectedIds = Array(clarificationSelections[question.id] ?? [])
+            guard !selectedIds.isEmpty else { continue }
+            let selectedLabels = question.options
+                .filter { selectedIds.contains($0.id) }
+                .map(\.label)
+            selections.append([
+                "question_id": question.id,
+                "question_text": question.question,
+                "selected_option_ids": selectedIds,
+                "selected_labels": selectedLabels,
+            ])
+        }
+
+        let payload: [String: Any] = [
+            "__clarification_response": true,
+            "original_query": originalQuery,
+            "selections": selections,
+        ]
+
+        // Build human-readable summary for user message bubble
+        let readableLines = clarificationQuestions.compactMap { question -> String? in
+            let selectedIds = clarificationSelections[question.id] ?? []
+            let labels = question.options
+                .filter { selectedIds.contains($0.id) }
+                .map { ($0.emoji.map { "\($0) " } ?? "") + $0.label }
+            return labels.isEmpty ? nil : labels.joined(separator: ", ")
+        }
+        let readableText = readableLines.joined(separator: " · ")
+
+        // Optimistically add user message
+        let userMessage = CurationMessage(
+            id: UUID(),
+            curationId: activeCurationId ?? UUID(),
+            role: "user",
+            content: readableText,
+            createdAt: Date()
+        )
+        messages.append(userMessage)
+
+        // Clear clarification state
+        clarificationQuestions = []
+        originalQueryForClarification = nil
+        clarificationSelections = [:]
+
+        // Send the JSON payload
+        isLoading = true
+        statusMessage = "Curator is researching..."
+        activities = []
+        researchPlan = nil
+        seenToolMessageIds = []
+        error = nil
+        startActivityPolling()
+
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: payload)
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? ""
+
+            let response = try await SupabaseManager.shared.sendCuratorMessage(
+                curationId: activeCurationId,
+                message: jsonString,
+                model: model.apiValue
+            )
+
+            activeCurationId = response.curationId
+
+            if let directResponse = response.response, response.clarificationQuestions == nil {
+                let assistantMessage = CurationMessage(
+                    id: UUID(),
+                    curationId: response.curationId,
+                    role: "assistant",
+                    content: directResponse,
+                    createdAt: Date()
+                )
+                messages.append(assistantMessage)
+
+                if let itemsAdded = response.itemsAdded, itemsAdded > 0 {
+                    let previousIds = Set(curationItems.map(\.id))
+                    await loadCurationItems()
+                    let newItems = curationItems.filter { !previousIds.contains($0.id) }
+                    if !newItems.isEmpty {
+                        messageItems[assistantMessage.id] = newItems
+                    }
+                }
+
+                stopActivityPolling()
+                isLoading = false
+                statusMessage = nil
+            } else {
+                await pollUntilReady(curationId: response.curationId)
+            }
+        } catch {
+            self.error = error.localizedDescription
+            messages.removeLast()
+            stopActivityPolling()
+            isLoading = false
+            statusMessage = nil
+        }
     }
 
     // MARK: - Selection

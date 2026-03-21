@@ -11,6 +11,8 @@ import type {
   SubagentConfig,
   SubagentResult,
   ClassificationResult,
+  ClarificationQuestion,
+  ClarificationResponse,
 } from "../_shared/types.ts";
 import {
   callAnthropic,
@@ -161,8 +163,36 @@ For MODERATE/COMPLEX, decompose into focused subqueries with roles:
 - library_searcher: searches internal content catalog
 - web_researcher: finds external content on the web
 
+Also determine if the query would benefit from clarification questions before researching. Set "needs_clarification": true when the query is broad or ambiguous, or when user preferences (content type, length, difficulty, format, etc.) would significantly improve results. Set false when the query is specific, the user already provided clear constraints, or this is a follow-up in an existing conversation with established context.
+
 Response format:
-{"complexity":"simple|moderate|complex","subqueries":[{"role":"library_searcher|web_researcher","query":"focused query"}],"reasoning":"brief explanation"}`;
+{"complexity":"simple|moderate|complex","needs_clarification":true|false,"subqueries":[{"role":"library_searcher|web_researcher","query":"focused query"}],"reasoning":"brief explanation"}`;
+
+const CLARIFICATION_PROMPT = `You generate clarification questions for a reading curation agent. Given a user's query, produce 1-3 follow-up questions that would help narrow down the best recommendations.
+
+Rules:
+- Questions should be specific to the user's query, NOT generic
+- Each question has 2-4 options with short labels (2-4 words) and optional emoji
+- selection_type: "single" when choices are mutually exclusive, "multi" when the user might want several
+- Do NOT ask about topics the user already specified
+- Focus on: content type, length/depth, recency, accessibility, difficulty level, perspective, format
+
+Respond with ONLY valid JSON:
+{
+  "intro": "Brief friendly message (1 sentence) acknowledging the query and saying you have a few questions",
+  "questions": [
+    {
+      "id": "q1",
+      "question": "What kind of content works best for you?",
+      "selection_type": "multi",
+      "options": [
+        {"id": "q1_a", "label": "Books", "emoji": "📚"},
+        {"id": "q1_b", "label": "Articles", "emoji": "📰"},
+        {"id": "q1_c", "label": "Research papers", "emoji": "📄"}
+      ]
+    }
+  ]
+}`;
 
 function getSubagentPrompt(role: string, userPreferences?: Finding[]): string {
   const prefContext = userPreferences?.length
@@ -242,13 +272,30 @@ serve(async (req: Request) => {
 
     // Get or create curation
     const curationId = await getOrCreateCuration(supabase, request, authenticatedUserId);
-    await saveUserMessage(supabase, curationId, request.message);
+
+    // Check if this is a clarification response
+    let effectiveMessage = message;
+    let skipClarification = false;
+    const clarificationResponse = parseClarificationResponse(message);
+    if (clarificationResponse) {
+      // Build enriched query from original + user selections
+      effectiveMessage = buildEnrichedQuery(clarificationResponse);
+      skipClarification = true;
+
+      // Save human-readable version as user message
+      const readableParts = clarificationResponse.selections
+        .map((s) => s.selected_labels.join(", "))
+        .filter(Boolean);
+      await saveUserMessage(supabase, curationId, readableParts.join(" · ") || message);
+    } else {
+      await saveUserMessage(supabase, curationId, message);
+    }
 
     // Fetch conversation history for context
     const history = await getConversationHistory(supabase, curationId);
 
     // Classify complexity
-    const classification = await classifyQuery(request.message, history);
+    const classification = await classifyQuery(effectiveMessage, history);
     const totalAgentCount = classification.complexity === "simple" ? 1 : classification.subqueries.length + 1;
 
     // Update curation with complexity
@@ -259,6 +306,36 @@ serve(async (req: Request) => {
         agent_count: totalAgentCount,
       })
       .eq("id", curationId);
+
+    // Clarification gate: ask follow-up questions before researching
+    if (classification.needs_clarification && !skipClarification) {
+      const clarification = await generateClarificationQuestions(effectiveMessage, history);
+      if (clarification && clarification.questions.length > 0) {
+        // Save intro as assistant message
+        await supabase.from("curation_messages").insert({
+          curation_id: curationId,
+          role: "assistant",
+          content: clarification.intro,
+        });
+
+        return new Response(
+          JSON.stringify({
+            curation_id: curationId,
+            response: clarification.intro,
+            clarification_questions: clarification.questions,
+            complexity: classification.complexity,
+            agent_count: totalAgentCount,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      // If clarification generation failed, fall through to normal research
+    }
+
+    // Use enriched message for research if this was a clarification response
+    if (clarificationResponse) {
+      request.message = effectiveMessage;
+    }
 
     if (classification.complexity === "simple") {
       // SIMPLE: inline agentic loop (backward compatible)
@@ -467,11 +544,75 @@ async function classifyQuery(
       complexity: parsed.complexity ?? "simple",
       subqueries: parsed.subqueries ?? [],
       reasoning: parsed.reasoning ?? "",
+      needs_clarification: parsed.needs_clarification ?? false,
     };
   } catch (e) {
     console.error("Classification failed, defaulting to simple:", e);
     return { complexity: "simple", subqueries: [], reasoning: "Classification failed" };
   }
+}
+
+// --- Clarification ---
+
+async function generateClarificationQuestions(
+  message: string,
+  history: { role: string; content: string }[]
+): Promise<{ intro: string; questions: ClarificationQuestion[] } | null> {
+  try {
+    const contextSummary =
+      history.length > 1
+        ? `\n\nConversation context:\n${history
+            .slice(-4)
+            .map((m) => `${m.role}: ${m.content.slice(0, 200)}`)
+            .join("\n")}`
+        : "";
+
+    const result = await callAnthropic(
+      CLARIFICATION_PROMPT,
+      [{ role: "user", content: `User query: "${message}"${contextSummary}` }],
+      "claude-haiku-4-5-20251001",
+      undefined,
+      1024
+    );
+
+    const cleaned = result.content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+      return null;
+    }
+    return {
+      intro: parsed.intro ?? "Before I start researching, a few quick questions.",
+      questions: parsed.questions,
+    };
+  } catch (e) {
+    console.error("Clarification generation failed, skipping:", e);
+    return null;
+  }
+}
+
+function parseClarificationResponse(
+  message: string
+): ClarificationResponse | null {
+  try {
+    const parsed = JSON.parse(message);
+    if (parsed.__clarification_response === true) {
+      return parsed as ClarificationResponse;
+    }
+  } catch {
+    // Not JSON or not a clarification response
+  }
+  return null;
+}
+
+function buildEnrichedQuery(clarification: ClarificationResponse): string {
+  let enriched = clarification.original_query;
+  if (clarification.selections.length > 0) {
+    enriched += "\n\nUser preferences:";
+    for (const sel of clarification.selections) {
+      enriched += `\n- ${sel.question_text}: ${sel.selected_labels.join(", ")}`;
+    }
+  }
+  return enriched;
 }
 
 // --- Inline Agent Loop (SIMPLE queries) ---

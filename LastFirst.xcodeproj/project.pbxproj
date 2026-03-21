@@ -26,6 +26,7 @@
 		44CB00732A966413E3FC5B5B /* BookCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32AF24ED35D01AC1B4D93F08 /* BookCoverView.swift */; };
 		475E339186C8C25CEAFD6001 /* BookCoverRibbon.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */; };
 		47C9DAE6092DD381EE1339A2 /* CurationCardStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1770FFEA952EB923C58DCA25 /* CurationCardStack.swift */; };
+		CC0A000000000001 /* ClarificationQuestionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0A000000000001 /* ClarificationQuestionsView.swift */; };
 		4D0EA37BA2FE4E53EB6DAB8E /* FootnotePopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B6670672B4C19B12808860B /* FootnotePopoverView.swift */; };
 		5CB0E9ED2409A42BF1A68333 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B1B9D9605C603338C590B7 /* BookmarksView.swift */; };
 		6394598283EABF385D69D51A /* CatalogItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */; };
@@ -130,6 +131,7 @@
 		0E2B3C4D5E6F7A8B9C0D1E2E /* RuledLinesBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuledLinesBackground.swift; sourceTree = "<group>"; };
 		0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogItem.swift; sourceTree = "<group>"; };
 		1770FFEA952EB923C58DCA25 /* CurationCardStack.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationCardStack.swift; sourceTree = "<group>"; };
+		DD0A000000000001 /* ClarificationQuestionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClarificationQuestionsView.swift; sourceTree = "<group>"; };
 		195ED0AA5E4C7E3A61E8778F /* ContentItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentItem.swift; sourceTree = "<group>"; };
 		1B6670672B4C19B12808860B /* FootnotePopoverView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FootnotePopoverView.swift; sourceTree = "<group>"; };
 		1E5232222ECDC75EF37CCB1B /* NavigationTab.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NavigationTab.swift; sourceTree = "<group>"; };
@@ -391,6 +393,7 @@
 				8190327746E57504C831F2F8 /* ProgressScrubber.swift */,
 				531EBD32CE4A61CF5799A87E /* MiniReaderBar.swift */,
 				A7D92A85F50F3F1FD4ED298D /* ContinueCard.swift */,
+				DD0A000000000001 /* ClarificationQuestionsView.swift */,
 				1770FFEA952EB923C58DCA25 /* CurationCardStack.swift */,
 				C4RA70F1A0ED0001A0000002 /* CuratorPlanView.swift */,
 				32AF24ED35D01AC1B4D93F08 /* BookCoverView.swift */,
@@ -626,6 +629,7 @@
 				2B07F5685E88ED49FC02F11D /* Curation.swift in Sources */,
 				19A7C7E47C46567D8E16886E /* ContentItem.swift in Sources */,
 				47C9DAE6092DD381EE1339A2 /* CurationCardStack.swift in Sources */,
+				CC0A000000000001 /* ClarificationQuestionsView.swift in Sources */,
 				C4RA70P1A0ED0001A0000001 /* CuratorPlanView.swift in Sources */,
 				44CB00732A966413E3FC5B5B /* BookCoverView.swift in Sources */,
 				475E339186C8C25CEAFD6001 /* BookCoverRibbon.swift in Sources */,

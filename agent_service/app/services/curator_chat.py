@@ -6,6 +6,7 @@ from typing import Any
 
 from app.config import Settings
 from app.models import (
+    ClarificationQuestion,
     ClassificationResult,
     CuratorChatRequest,
     CuratorChatResponse,
@@ -40,8 +41,36 @@ For MODERATE/COMPLEX, decompose into focused subqueries with roles:
 - library_searcher: searches internal content catalog
 - web_researcher: finds external content on the web
 
+Also determine if the query would benefit from clarification questions before researching. Set "needs_clarification": true when the query is broad or ambiguous, or when user preferences (content type, length, difficulty, format, etc.) would significantly improve results. Set false when the query is specific, the user already provided clear constraints, or this is a follow-up in an existing conversation with established context.
+
 Response format:
-{"complexity":"simple|moderate|complex","subqueries":[{"role":"library_searcher|web_researcher","query":"focused query"}],"reasoning":"brief explanation"}"""
+{"complexity":"simple|moderate|complex","needs_clarification":true|false,"subqueries":[{"role":"library_searcher|web_researcher","query":"focused query"}],"reasoning":"brief explanation"}"""
+
+CLARIFICATION_PROMPT = """You generate clarification questions for a reading curation agent. Given a user's query, produce 1-3 follow-up questions that would help narrow down the best recommendations.
+
+Rules:
+- Questions should be specific to the user's query, NOT generic
+- Each question has 2-4 options with short labels (2-4 words) and optional emoji
+- selection_type: "single" when choices are mutually exclusive, "multi" when the user might want several
+- Do NOT ask about topics the user already specified
+- Focus on: content type, length/depth, recency, accessibility, difficulty level, perspective, format
+
+Respond with ONLY valid JSON:
+{
+  "intro": "Brief friendly message (1 sentence) acknowledging the query and saying you have a few questions",
+  "questions": [
+    {
+      "id": "q1",
+      "question": "What kind of content works best for you?",
+      "selection_type": "multi",
+      "options": [
+        {"id": "q1_a", "label": "Books", "emoji": "📚"},
+        {"id": "q1_b", "label": "Articles", "emoji": "📰"},
+        {"id": "q1_c", "label": "Research papers", "emoji": "📄"}
+      ]
+    }
+  ]
+}"""
 
 # Tool definitions for the chat service include create_curation_item
 CHAT_TOOL_DEFINITIONS = TOOL_DEFINITIONS + [
@@ -154,15 +183,57 @@ class CuratorChatService:
             raise ValueError("user_id is required")
 
         curation_id = self._get_or_create_curation(request, user_id)
-        self._repository.insert_curation_message(curation_id, "user", request.message)
+
+        # Check if this is a clarification response
+        effective_message = request.message
+        skip_clarification = False
+        clarification_response = self._parse_clarification_response(request.message)
+        if clarification_response:
+            effective_message = self._build_enriched_query(clarification_response)
+            skip_clarification = True
+            readable_parts = [
+                ", ".join(s.get("selected_labels", []))
+                for s in clarification_response.get("selections", [])
+                if s.get("selected_labels")
+            ]
+            self._repository.insert_curation_message(
+                curation_id, "user", " · ".join(readable_parts) or request.message
+            )
+        else:
+            self._repository.insert_curation_message(curation_id, "user", request.message)
+
         history = self._get_conversation_history(curation_id)
-        classification = await self._classify_query(request.message, history)
+        classification = await self._classify_query(effective_message, history)
 
         total_agents = 1 if classification.complexity == "simple" else len(classification.subqueries) + 1
         self._repository.update_curation(
             curation_id,
             {"complexity": classification.complexity, "agent_count": total_agents},
         )
+
+        # Clarification gate
+        if classification.needs_clarification and not skip_clarification:
+            clarification = await self._generate_clarification_questions(effective_message, history)
+            if clarification:
+                self._repository.insert_curation_message(
+                    curation_id, "assistant", clarification["intro"]
+                )
+                return CuratorChatResponse(
+                    curation_id=curation_id,
+                    response=clarification["intro"],
+                    clarification_questions=clarification["questions"],
+                    complexity=classification.complexity,
+                    agent_count=total_agents,
+                )
+
+        # Use enriched message for research
+        if clarification_response:
+            request = CuratorChatRequest(
+                curation_id=request.curation_id,
+                message=effective_message,
+                user_id=request.user_id,
+                model=request.model,
+            )
 
         if classification.complexity == "simple":
             return await self._run_simple(curation_id, request, history, classification, total_agents)
@@ -610,9 +681,59 @@ Respond with JSON:
                 complexity=parsed.get("complexity", "simple"),
                 subqueries=parsed.get("subqueries", []),
                 reasoning=parsed.get("reasoning", ""),
+                needs_clarification=parsed.get("needs_clarification", False),
             )
         except Exception as exc:
             return ClassificationResult(complexity="simple", reasoning=f"Classification failed: {exc}")
+
+    async def _generate_clarification_questions(
+        self, message: str, history: list[dict[str, str]]
+    ) -> dict[str, Any] | None:
+        try:
+            context_summary = ""
+            if len(history) > 1:
+                context_summary = "\n\nConversation context:\n" + "\n".join(
+                    f"{m['role']}: {m['content'][:200]}" for m in history[-4:]
+                )
+            result = await self._anthropic.call_with_tools(
+                system_prompt=CLARIFICATION_PROMPT,
+                messages=[{"role": "user", "content": f'User query: "{message}"{context_summary}'}],
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1024,
+            )
+            cleaned = result.content.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(cleaned)
+            questions = parsed.get("questions", [])
+            if not questions:
+                return None
+            return {
+                "intro": parsed.get("intro", "Before I start researching, a few quick questions."),
+                "questions": [ClarificationQuestion(**q) for q in questions],
+            }
+        except Exception as exc:
+            print(f"Clarification generation failed, skipping: {exc}")
+            return None
+
+    @staticmethod
+    def _parse_clarification_response(message: str) -> dict[str, Any] | None:
+        try:
+            parsed = json.loads(message)
+            if parsed.get("__clarification_response") is True:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return None
+
+    @staticmethod
+    def _build_enriched_query(clarification: dict[str, Any]) -> str:
+        enriched = clarification.get("original_query", "")
+        selections = clarification.get("selections", [])
+        if selections:
+            enriched += "\n\nUser preferences:"
+            for sel in selections:
+                labels = ", ".join(sel.get("selected_labels", []))
+                enriched += f"\n- {sel.get('question_text', '')}: {labels}"
+        return enriched
 
     async def _execute_create_item(self, curation_id: str, input_data: dict[str, Any]) -> str:
         existing_items = self._repository.get_curation_item_count(curation_id)

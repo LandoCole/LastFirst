@@ -184,3 +184,25 @@ struct CurationMessage: Identifiable, Codable, Equatable {
         case createdAt = "created_at"
     }
 }
+
+// MARK: - Clarification Models
+
+struct ClarificationOption: Identifiable, Codable, Equatable {
+    let id: String
+    let label: String
+    let emoji: String?
+}
+
+struct ClarificationQuestion: Identifiable, Codable, Equatable {
+    let id: String
+    let question: String
+    let selectionType: String
+    let options: [ClarificationOption]
+
+    var isMultiSelect: Bool { selectionType == "multi" }
+
+    enum CodingKeys: String, CodingKey {
+        case id, question, options
+        case selectionType = "selection_type"
+    }
+}
