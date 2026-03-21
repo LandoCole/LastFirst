@@ -64,7 +64,7 @@ function toOpenAITools(
 
 function toGeminiTools(
   tools: ToolDefinition[]
-): { functionDeclarations: { name: string; description: string; parameters: Record<string, unknown> }[] }[] {
+): Record<string, unknown>[] {
   return [
     {
       functionDeclarations: tools.map((t) => ({
@@ -83,7 +83,8 @@ export async function callAnthropic(
   messages: { role: string; content: unknown }[],
   model = "claude-sonnet-4-20250514",
   tools?: ToolDefinition[],
-  maxTokens = 4096
+  maxTokens = 4096,
+  enableWebSearch = false
 ): Promise<NormalizedLLMResponse> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
@@ -94,7 +95,12 @@ export async function callAnthropic(
     system: systemPrompt,
     messages,
   };
-  if (tools?.length) body.tools = tools;
+  const allTools: Record<string, unknown>[] = [];
+  if (enableWebSearch) {
+    allTools.push({ type: "web_search_20250305", name: "web_search", max_uses: 3 });
+  }
+  if (tools?.length) allTools.push(...tools);
+  if (allTools.length > 0) body.tools = allTools;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -114,15 +120,16 @@ export async function callAnthropic(
   const data = await res.json();
   let content = "";
   const toolCalls: ToolCall[] = [];
+  const rawContent: Record<string, unknown>[] = data.content ?? [];
 
-  for (const block of data.content ?? []) {
+  for (const block of rawContent) {
     if (block.type === "text") {
-      content += block.text;
+      content += (block as { text: string }).text;
     } else if (block.type === "tool_use") {
       toolCalls.push({
-        id: block.id,
-        name: block.name,
-        input: block.input,
+        id: block.id as string,
+        name: block.name as string,
+        input: (block.input ?? {}) as Record<string, unknown>,
       });
     }
   }
@@ -132,6 +139,7 @@ export async function callAnthropic(
     toolCalls,
     stopReason: data.stop_reason ?? "end_turn",
     usage: data.usage,
+    rawContent: enableWebSearch ? rawContent : undefined,
   };
 }
 
@@ -140,10 +148,16 @@ export async function callOpenAI(
   messages: { role: string; content: unknown }[],
   model = "gpt-4o",
   tools?: ToolDefinition[],
-  maxTokens = 4096
+  maxTokens = 4096,
+  enableWebSearch = false
 ): Promise<NormalizedLLMResponse> {
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) throw new Error("OPENAI_API_KEY not set");
+
+  if (enableWebSearch) {
+    if (model.includes("gpt-4o-mini")) model = "gpt-4o-mini-search-preview";
+    else model = "gpt-4o-search-preview";
+  }
 
   const oaiMessages = [
     { role: "system", content: systemPrompt },
@@ -155,6 +169,7 @@ export async function callOpenAI(
     max_tokens: maxTokens,
     messages: oaiMessages,
   };
+  if (enableWebSearch) body.web_search_options = {};
   if (tools?.length) body.tools = toOpenAITools(tools);
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -201,7 +216,8 @@ export async function callGemini(
   messages: { role: string; content: unknown }[],
   model = "gemini-2.0-flash",
   tools?: ToolDefinition[],
-  maxTokens = 4096
+  maxTokens = 4096,
+  enableWebSearch = false
 ): Promise<NormalizedLLMResponse> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY not set");
@@ -211,12 +227,15 @@ export async function callGemini(
     parts: [{ text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
   }));
 
+  const geminiTools: Record<string, unknown>[] = tools?.length ? toGeminiTools(tools) : [];
+  if (enableWebSearch) geminiTools.push({ google_search: {} });
+
   const body: Record<string, unknown> = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: geminiMessages,
     generationConfig: { maxOutputTokens: maxTokens },
   };
-  if (tools?.length) body.tools = toGeminiTools(tools);
+  if (geminiTools.length > 0) body.tools = geminiTools;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
@@ -269,15 +288,16 @@ export async function callLLM(
   messages: { role: string; content: unknown }[],
   model: string,
   tools?: ToolDefinition[],
-  maxTokens = 4096
+  maxTokens = 4096,
+  enableWebSearch = false
 ): Promise<NormalizedLLMResponse> {
   switch (provider) {
     case "openai":
-      return callOpenAI(systemPrompt, messages, model, tools, maxTokens);
+      return callOpenAI(systemPrompt, messages, model, tools, maxTokens, enableWebSearch);
     case "google":
-      return callGemini(systemPrompt, messages, model, tools, maxTokens);
+      return callGemini(systemPrompt, messages, model, tools, maxTokens, enableWebSearch);
     case "anthropic":
     default:
-      return callAnthropic(systemPrompt, messages, model, tools, maxTokens);
+      return callAnthropic(systemPrompt, messages, model, tools, maxTokens, enableWebSearch);
   }
 }

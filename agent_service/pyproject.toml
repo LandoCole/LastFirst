@@ -11,6 +11,8 @@ dependencies = [
   "pydantic-settings>=2.4.0,<3.0.0",
   "supabase>=2.7.4,<3.0.0",
   "PyYAML>=6.0.2,<7.0.0",
+  "readability-lxml>=0.8.1",
+  "markdownify>=0.13.1",
 ]
 
 [build-system]

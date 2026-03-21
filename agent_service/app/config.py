@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_role_key: str
     anthropic_api_key: str
-    firecrawl_api_key: str | None = None
     openai_api_key: str | None = None
     app_env: str = "development"
     agent_default_model: str = "claude-sonnet-4-20250514"

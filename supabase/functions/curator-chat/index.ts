@@ -140,7 +140,7 @@ async function getAuthenticatedUserId(req: Request): Promise<string> {
 
 const CURATOR_SYSTEM_PROMPT = `You are the Curator, an AI research agent for the LastFirst reading app. Your job is to help users discover books, articles, papers, and other reading material.
 
-You have access to tools to search the internal library, search the web, fetch URLs, and add items to curations. Use multiple search strategies to find the best results.
+You have access to tools to search the internal library, fetch URLs, and add items to curations. You also have built-in web search capability for finding content online. Use multiple search strategies to find the best results.
 
 When you find relevant content, use create_curation_item to add it to the curation with a personalized agent_note explaining why you're recommending it.
 
@@ -181,9 +181,9 @@ For each relevant item found, include it in your findings. Try at least 2-3 diff
 Each finding: {"source":"library","content_id":"uuid","title":"...","author":"...","summary":"...","relevance_note":"why this is relevant","confidence":0.0-1.0}`;
 
     case "web_researcher":
-      return `You are a Web Researcher agent for the LastFirst reading app. Search the web to find books, articles, papers, and reading material that aren't in the internal library.${prefContext}
+      return `You are a Web Researcher agent for the LastFirst reading app. You have built-in web search capability to find books, articles, papers, and reading material that aren't in the internal library.${prefContext}
 
-Use multiple search queries with different angles. For promising results, fetch the URL to get more details. Return findings as a JSON array.
+Use multiple search queries with different angles. For promising results, use the fetch_url tool to get more details. Return findings as a JSON array.
 
 Each finding: {"source":"web","url":"...","title":"...","author":"...","summary":"...","relevance_note":"why this is relevant","confidence":0.0-1.0}`;
 
@@ -511,7 +511,8 @@ async function runInlineAgentLoop(
       messages,
       modelId,
       TOOL_DEFINITIONS,
-      4096
+      4096,
+      true
     );
 
     if (result.toolCalls.length === 0) {
@@ -532,7 +533,7 @@ async function runInlineAgentLoop(
     });
 
     for (const tc of result.toolCalls) {
-      const stepIndex = tc.name === "search_content" || tc.name === "search_web" ? 0
+      const stepIndex = tc.name === "search_content" ? 0
         : tc.name === "get_content_details" || tc.name === "fetch_url" ? 1 : 2;
 
       if (activeStepIndex !== stepIndex) {
@@ -620,6 +621,9 @@ async function runInlineAgentLoop(
 }
 
 function formatAssistantContent(result: NormalizedLLMResponse): unknown {
+  if (result.rawContent) {
+    return result.rawContent;
+  }
   const blocks: unknown[] = [];
   if (result.content) {
     blocks.push({ type: "text", text: result.content });
@@ -677,7 +681,8 @@ async function runSubagent(
         messages,
         "claude-sonnet-4-20250514",
         tools.length > 0 ? tools : undefined,
-        4096
+        4096,
+        config.role === "web_researcher"
       );
 
       totalTokens += (result.usage?.input_tokens ?? 0) + (result.usage?.output_tokens ?? 0);

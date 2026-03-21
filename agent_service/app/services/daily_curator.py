@@ -8,7 +8,6 @@ from typing import Any
 from app.config import Settings
 from app.models import DailyCurationConfig, DailyRunRequest, DailyRunResponse, Finding
 from app.services.anthropic_client import AnthropicService
-from app.services.firecrawl import FirecrawlService
 from app.services.semantic_vault import SemanticVaultService
 from app.services.supabase_repository import SupabaseRepository
 from app.services.tools import TOOL_DEFINITIONS, ToolExecutor
@@ -49,16 +48,14 @@ class DailyCuratorService:
         *,
         repository: SupabaseRepository,
         anthropic: AnthropicService,
-        firecrawl: FirecrawlService,
         semantic_vault: SemanticVaultService,
         settings: Settings,
     ) -> None:
         self._repository = repository
         self._anthropic = anthropic
-        self._firecrawl = firecrawl
         self._semantic_vault = semantic_vault
         self._settings = settings
-        self._tools = ToolExecutor(repository, firecrawl, semantic_vault)
+        self._tools = ToolExecutor(repository, semantic_vault)
 
     async def run(self, request: DailyRunRequest) -> DailyRunResponse:
         configs = self._repository.list_daily_configs(user_id=request.user_id, max_users=request.max_users)
@@ -127,6 +124,7 @@ class DailyCuratorService:
                     model=self._settings.agent_default_model,
                     tools=TOOL_DEFINITIONS,
                     max_tokens=4096,
+                    enable_web_search=True,
                 )
 
                 if not result.tool_calls:
@@ -140,7 +138,7 @@ class DailyCuratorService:
                 messages.append(
                     {
                         "role": "assistant",
-                        "content": self._format_assistant_content(result.content, result.tool_calls),
+                        "content": self._format_assistant_content(result.content, result.tool_calls, result.raw_content),
                     }
                 )
 
@@ -344,7 +342,11 @@ class DailyCuratorService:
             )
         return normalized
 
-    def _format_assistant_content(self, content: str, tool_calls: list[Any]) -> list[dict[str, Any]]:
+    def _format_assistant_content(
+        self, content: str, tool_calls: list[Any], raw_content: list[dict[str, Any]] | None = None
+    ) -> list[dict[str, Any]]:
+        if raw_content is not None:
+            return raw_content
         blocks: list[dict[str, Any]] = []
         if content:
             blocks.append({"type": "text", "text": content})

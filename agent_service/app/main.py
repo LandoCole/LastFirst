@@ -23,7 +23,6 @@ from app.services.anthropic_client import AnthropicService
 from app.services.curator_chat import CuratorChatService
 from app.services.daily_curator import DailyCuratorService
 from app.services.embeddings import EmbeddingService
-from app.services.firecrawl import FirecrawlService
 from app.services.semantic_vault import SemanticVaultService
 from app.services.supabase_repository import SupabaseRepository
 from app.services.vault_service import VaultService
@@ -42,7 +41,6 @@ def require_internal_key(
 def get_daily_curator(settings: Settings = Depends(get_settings)) -> DailyCuratorService:
     repository = SupabaseRepository(settings.supabase_url, settings.supabase_service_role_key)
     anthropic = AnthropicService(settings.anthropic_api_key)
-    firecrawl = FirecrawlService(settings.firecrawl_api_key)
     embedding_service = EmbeddingService(settings.openai_api_key, settings.embedding_model)
     semantic_vault = SemanticVaultService(
         repository=repository,
@@ -52,7 +50,6 @@ def get_daily_curator(settings: Settings = Depends(get_settings)) -> DailyCurato
     return DailyCuratorService(
         repository=repository,
         anthropic=anthropic,
-        firecrawl=firecrawl,
         semantic_vault=semantic_vault,
         settings=settings,
     )
@@ -61,7 +58,6 @@ def get_daily_curator(settings: Settings = Depends(get_settings)) -> DailyCurato
 def get_curator_chat(settings: Settings = Depends(get_settings)) -> CuratorChatService:
     repository = SupabaseRepository(settings.supabase_url, settings.supabase_service_role_key)
     anthropic = AnthropicService(settings.anthropic_api_key)
-    firecrawl = FirecrawlService(settings.firecrawl_api_key)
     embedding_service = EmbeddingService(settings.openai_api_key, settings.embedding_model)
     semantic_vault = SemanticVaultService(
         repository=repository,
@@ -71,7 +67,6 @@ def get_curator_chat(settings: Settings = Depends(get_settings)) -> CuratorChatS
     return CuratorChatService(
         repository=repository,
         anthropic=anthropic,
-        firecrawl=firecrawl,
         semantic_vault=semantic_vault,
         settings=settings,
     )

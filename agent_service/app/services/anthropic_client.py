@@ -19,6 +19,7 @@ class AnthropicService:
         model: str,
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int = 4096,
+        enable_web_search: bool = False,
     ) -> NormalizedLLMResponse:
         payload: dict[str, Any] = {
             "model": model,
@@ -26,8 +27,13 @@ class AnthropicService:
             "system": system_prompt,
             "messages": messages,
         }
+        all_tools: list[dict[str, Any]] = []
+        if enable_web_search:
+            all_tools.append({"type": "web_search_20250305", "name": "web_search", "max_uses": 3})
         if tools:
-            payload["tools"] = tools
+            all_tools.extend(tools)
+        if all_tools:
+            payload["tools"] = all_tools
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
@@ -44,7 +50,8 @@ class AnthropicService:
 
         content_parts: list[str] = []
         tool_calls: list[ToolCall] = []
-        for block in data.get("content", []):
+        raw_content: list[dict[str, Any]] = data.get("content", [])
+        for block in raw_content:
             if block.get("type") == "text":
                 content_parts.append(block.get("text", ""))
             elif block.get("type") == "tool_use":
@@ -61,4 +68,5 @@ class AnthropicService:
             tool_calls=tool_calls,
             stop_reason=data.get("stop_reason", "end_turn"),
             usage=data.get("usage"),
+            raw_content=raw_content if enable_web_search else None,
         )

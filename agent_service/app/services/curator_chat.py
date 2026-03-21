@@ -13,14 +13,13 @@ from app.models import (
     SubagentResult,
 )
 from app.services.anthropic_client import AnthropicService
-from app.services.firecrawl import FirecrawlService
 from app.services.semantic_vault import SemanticVaultService
 from app.services.supabase_repository import SupabaseRepository
 from app.services.tools import TOOL_DEFINITIONS, ToolExecutor
 
 CURATOR_SYSTEM_PROMPT = """You are the Curator, an AI research agent for the LastFirst reading app. Your job is to help users discover books, articles, papers, and other reading material.
 
-You have access to tools to search the internal library, search the web, fetch URLs, and add items to curations. Use multiple search strategies to find the best results.
+You have access to tools to search the internal library, fetch URLs, and add items to curations. You also have built-in web search capability for finding content online. Use multiple search strategies to find the best results.
 
 When you find relevant content, use create_curation_item to add it to the curation with a personalized agent_note explaining why you're recommending it.
 
@@ -72,7 +71,7 @@ CHAT_TOOL_DEFINITIONS = TOOL_DEFINITIONS + [
 SUBAGENT_TOOLS: dict[str, list[str]] = {
     "preference_analyst": ["get_user_reading_history"],
     "library_searcher": ["search_content", "get_content_details"],
-    "web_researcher": ["search_web", "fetch_url"],
+    "web_researcher": ["fetch_url"],
 }
 
 SUBAGENT_MAX_ITERATIONS: dict[str, int] = {
@@ -108,8 +107,8 @@ def _get_subagent_prompt(role: str, user_preferences: list[Finding] | None = Non
         )
     if role == "web_researcher":
         return (
-            f"You are a Web Researcher agent for the LastFirst reading app. Search the web to find books, articles, papers, and reading material that aren't in the internal library.{pref_context}\n\n"
-            "Use multiple search queries with different angles. For promising results, fetch the URL to get more details. Return findings as a JSON array.\n\n"
+            f"You are a Web Researcher agent for the LastFirst reading app. You have built-in web search capability to find books, articles, papers, and reading material that aren't in the internal library.{pref_context}\n\n"
+            "Use multiple search queries with different angles. For promising results, use the fetch_url tool to get more details. Return findings as a JSON array.\n\n"
             'Each finding: {"source":"web","url":"...","title":"...","author":"...","summary":"...","relevance_note":"why this is relevant","confidence":0.0-1.0}'
         )
     return CURATOR_SYSTEM_PROMPT
@@ -121,16 +120,14 @@ class CuratorChatService:
         *,
         repository: SupabaseRepository,
         anthropic: AnthropicService,
-        firecrawl: FirecrawlService,
         semantic_vault: SemanticVaultService,
         settings: Settings,
     ) -> None:
         self._repository = repository
         self._anthropic = anthropic
-        self._firecrawl = firecrawl
         self._semantic_vault = semantic_vault
         self._settings = settings
-        self._tools = ToolExecutor(repository, firecrawl, semantic_vault)
+        self._tools = ToolExecutor(repository, semantic_vault)
 
     async def handle(self, request: CuratorChatRequest) -> CuratorChatResponse:
         user_id = request.user_id
@@ -180,7 +177,7 @@ class CuratorChatService:
         step_start_msgs = ["Searching for relevant content...", "Reviewing promising matches...", "Adding recommendations to your curation..."]
         step_complete_msgs = ["Search complete", "Evaluation complete", "Curation complete"]
         tool_step_map = {
-            "search_content": 0, "search_web": 0,
+            "search_content": 0,
             "get_content_details": 1, "fetch_url": 1,
         }
 
@@ -191,6 +188,7 @@ class CuratorChatService:
                 model=self._settings.agent_default_model,
                 tools=CHAT_TOOL_DEFINITIONS,
                 max_tokens=4096,
+                enable_web_search=True,
             )
 
             if not result.tool_calls:
@@ -212,7 +210,7 @@ class CuratorChatService:
 
             messages.append({
                 "role": "assistant",
-                "content": self._format_assistant_content(result.content, result.tool_calls),
+                "content": self._format_assistant_content(result.content, result.tool_calls, result.raw_content),
             })
 
             for tc in result.tool_calls:
@@ -374,6 +372,7 @@ class CuratorChatService:
                     model=self._settings.agent_default_model,
                     tools=tools if tools else None,
                     max_tokens=4096,
+                    enable_web_search=role == "web_researcher",
                 )
                 if result.usage:
                     total_tokens += (result.usage.get("input_tokens", 0) + result.usage.get("output_tokens", 0))
@@ -396,7 +395,7 @@ class CuratorChatService:
 
                 messages.append({
                     "role": "assistant",
-                    "content": self._format_assistant_content(result.content, result.tool_calls),
+                    "content": self._format_assistant_content(result.content, result.tool_calls, result.raw_content),
                 })
 
                 for tc in result.tool_calls:
@@ -602,7 +601,11 @@ Respond with JSON:
     def _emit_status(self, curation_id: str, status: dict[str, Any]) -> None:
         self._repository.insert_curation_message(curation_id, "tool", json.dumps(status))
 
-    def _format_assistant_content(self, content: str, tool_calls: list[Any]) -> list[dict[str, Any]]:
+    def _format_assistant_content(
+        self, content: str, tool_calls: list[Any], raw_content: list[dict[str, Any]] | None = None
+    ) -> list[dict[str, Any]]:
+        if raw_content is not None:
+            return raw_content
         blocks: list[dict[str, Any]] = []
         if content:
             blocks.append({"type": "text", "text": content})
@@ -614,7 +617,6 @@ Respond with JSON:
     def _tool_display_name(name: str) -> str:
         names = {
             "search_content": "Searching library",
-            "search_web": "Searching the web",
             "fetch_url": "Reading page",
             "get_content_details": "Getting details",
             "get_user_reading_history": "Reviewing reading history",

@@ -9,7 +9,6 @@ import httpx
 
 from app.models import VaultNoteInput
 from app.services.obsidian_parser import ObsidianParser
-from app.services.firecrawl import FirecrawlService
 from app.services.semantic_vault import SemanticVaultService
 from app.services.supabase_repository import SupabaseRepository
 
@@ -35,18 +34,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "content_id": {"type": "string", "description": "UUID of the content item"},
             },
             "required": ["content_id"],
-        },
-    },
-    {
-        "name": "search_web",
-        "description": "Search the web for books, articles, papers, or other reading material from reliable sources.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"},
-                "num_results": {"type": "number", "description": "Number of results (default 5)"},
-            },
-            "required": ["query"],
         },
     },
     {
@@ -150,11 +137,9 @@ class ToolExecutor:
     def __init__(
         self,
         repository: SupabaseRepository,
-        firecrawl: FirecrawlService,
         semantic_vault: SemanticVaultService | None = None,
     ) -> None:
         self._repository = repository
-        self._firecrawl = firecrawl
         self._parser = ObsidianParser()
         self._semantic_vault = semantic_vault
 
@@ -168,13 +153,6 @@ class ToolExecutor:
 
         if tool_name == "get_content_details":
             payload = self._repository.get_content_details(str(input_data.get("content_id", "")))
-            return json.dumps(payload)
-
-        if tool_name == "search_web":
-            payload = await self._firecrawl.search(
-                query=str(input_data.get("query", "")),
-                limit=int(input_data.get("num_results", 5)),
-            )
             return json.dumps(payload)
 
         if tool_name == "fetch_url":
@@ -240,57 +218,63 @@ class ToolExecutor:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
     async def _fetch_url(self, url: str) -> dict[str, Any]:
-        if self._firecrawl.enabled:
-            try:
-                document = await self._firecrawl.scrape(url, ["markdown", "html"])
-                metadata = document.get("metadata", {})
-                markdown = document.get("markdown", "")
-                return {
-                    "title": metadata.get("title", ""),
-                    "author": extract_author(metadata),
-                    "content": markdown[:4000],
-                    "url": url,
-                    "readable": len(markdown) > 500,
-                }
-            except Exception as exc:
-                return {"error": f"Failed to fetch URL: {exc}"}
-
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers={"User-Agent": "LastFirst-Agent/1.0"})
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(
+                    url, headers={"User-Agent": "Mozilla/5.0 (compatible; LastFirst/1.0)"}
+                )
                 response.raise_for_status()
-                text = response.text
+                html = response.text
         except Exception as exc:
             return {"error": f"Failed to fetch URL: {exc}"}
 
-        title_match = re.search(r"<title[^>]*>(.*?)</title>", text, re.IGNORECASE | re.DOTALL)
+        from readability import Document
+        from markdownify import markdownify as md
+
+        doc = Document(html)
+        title = doc.title()
+        content_html = doc.summary()
+        markdown = md(content_html, heading_style="ATX", strip=["img", "script", "style"])
+        author = _extract_author_from_html(html)
+
         return {
-            "title": title_match.group(1).strip() if title_match else "",
-            "content": re.sub(r"<[^>]*>", "", text)[:4000],
+            "title": title,
+            "author": author,
+            "content": markdown[:4000],
             "url": url,
-            "readable": True,
+            "readable": len(markdown) > 200,
         }
 
     async def _ingest_url(self, url: str, title: Any = None, author: Any = None) -> dict[str, Any]:
-        if not self._firecrawl.enabled:
-            return {"error": "FIRECRAWL_API_KEY not set"}
-
         try:
-            document = await self._firecrawl.scrape(url, ["markdown", "html"])
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(
+                    url, headers={"User-Agent": "Mozilla/5.0 (compatible; LastFirst/1.0)"}
+                )
+                response.raise_for_status()
+                html = response.text
         except Exception as exc:
             return {"error": f"Ingest failed: {exc}"}
 
-        metadata = document.get("metadata", {})
-        markdown = document.get("markdown", "")
-        html = document.get("html", "")
-        chosen_title = str(title or metadata.get("title") or "")
-        chosen_author = str(author or extract_author(metadata) or "") or None
+        from readability import Document
+        from markdownify import markdownify as md
+
+        doc = Document(html)
+        extracted_title = doc.title()
+        content_html = doc.summary()
+        markdown = md(content_html, heading_style="ATX", strip=["img", "script", "style"])
+        extracted_author = _extract_author_from_html(html)
+        metadata = _extract_metadata_from_html(html)
+
+        chosen_title = str(title or extracted_title or "")
+        chosen_author = str(author or extracted_author or "") or None
+
         row = self._repository.upsert_web_content(
             url=url,
             title=chosen_title,
             author=chosen_author,
             markdown=markdown,
-            html=html,
+            html=content_html,
             metadata=metadata,
         )
         content_id = row.get("id") if isinstance(row, dict) else None
@@ -361,13 +345,29 @@ class ToolExecutor:
         return {"success": True, "note_id": note_id, "path": path, "title": title}
 
 
-def extract_author(metadata: dict[str, Any]) -> str:
-    return str(
-        metadata.get("author")
-        or metadata.get("og:author")
-        or metadata.get("article:author")
-        or metadata.get("dc.creator")
-        or metadata.get("twitter:creator")
-        or metadata.get("ogAuthor")
-        or ""
-    )
+def _extract_author_from_html(html: str) -> str:
+    for attr in ["author", "og:author", "article:author", "dc.creator", "twitter:creator"]:
+        match = re.search(
+            rf'<meta[^>]*(?:name|property)="{attr}"[^>]*content="([^"]*)"',
+            html,
+            re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
+def _extract_metadata_from_html(html: str) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    for attr in ["og:title", "og:description", "og:image", "og:site_name", "language"]:
+        match = re.search(
+            rf'<meta[^>]*(?:name|property)="{attr}"[^>]*content="([^"]*)"',
+            html,
+            re.IGNORECASE,
+        )
+        if match:
+            metadata[attr] = match.group(1).strip()
+    lang_match = re.search(r'<html[^>]*lang="([^"]*)"', html, re.IGNORECASE)
+    if lang_match:
+        metadata["language"] = lang_match.group(1).strip()
+    return metadata

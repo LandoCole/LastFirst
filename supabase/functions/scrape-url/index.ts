@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.48/deno-dom-wasm.ts";
 
-const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -23,16 +23,38 @@ interface ScrapeResult {
   sourceUrl: string;
 }
 
-function extractAuthor(metadata: Record<string, unknown>): string {
-  return String(
-    metadata?.author ??
-    metadata?.["og:author"] ??
-    metadata?.["article:author"] ??
-    metadata?.["dc.creator"] ??
-    metadata?.["twitter:creator"] ??
-    metadata?.ogAuthor ??
-    ""
-  );
+function extractMetaContent(doc: ReturnType<DOMParser["parseFromString"]>, attrs: string[]): string {
+  if (!doc) return "";
+  for (const attr of attrs) {
+    const el = doc.querySelector(`meta[name="${attr}"], meta[property="${attr}"]`);
+    if (el) {
+      const content = (el as unknown as Element).getAttribute("content");
+      if (content) return content.trim();
+    }
+  }
+  return "";
+}
+
+function htmlToMarkdown(html: string): string {
+  let md = html;
+  md = md.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "# $1\n\n");
+  md = md.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, "## $1\n\n");
+  md = md.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, "### $1\n\n");
+  md = md.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, "#### $1\n\n");
+  md = md.replace(/<h5[^>]*>([\s\S]*?)<\/h5>/gi, "##### $1\n\n");
+  md = md.replace(/<h6[^>]*>([\s\S]*?)<\/h6>/gi, "###### $1\n\n");
+  md = md.replace(/<(strong|b)>([\s\S]*?)<\/(strong|b)>/gi, "**$2**");
+  md = md.replace(/<(em|i)>([\s\S]*?)<\/(em|i)>/gi, "*$2*");
+  md = md.replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "[$2]($1)");
+  md = md.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, "$1\n\n");
+  md = md.replace(/<br\s*\/?>/gi, "\n");
+  md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n");
+  md = md.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, "> $1\n\n");
+  md = md.replace(/<[^>]*>/g, "");
+  md = md.replace(/\n{3,}/g, "\n\n").trim();
+  md = md.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+  return md;
 }
 
 async function hashURL(url: string): Promise<string> {
@@ -55,7 +77,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { url, formats = ["markdown", "html"] } = (await req.json()) as ScrapeRequest;
+    const { url } = (await req.json()) as ScrapeRequest;
 
     if (!url) {
       return new Response(JSON.stringify({ error: "url is required" }), {
@@ -81,40 +103,59 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Call Firecrawl API
-    const firecrawlResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
-      },
-      body: JSON.stringify({
-        url,
-        formats,
-      }),
+    // Fetch and parse with readability
+    const fetchRes = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; LastFirst/1.0)" },
+      redirect: "follow",
     });
 
-    if (!firecrawlResponse.ok) {
-      const errorBody = await firecrawlResponse.text();
-      console.error("[scrape-url] Firecrawl error:", firecrawlResponse.status, errorBody);
+    if (!fetchRes.ok) {
       return new Response(
-        JSON.stringify({ error: "Firecrawl scrape failed", details: errorBody }),
-        { status: firecrawlResponse.status, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ error: `Fetch failed: HTTP ${fetchRes.status}` }),
+        { status: fetchRes.status, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const firecrawlData = await firecrawlResponse.json();
-    const data = firecrawlData.data;
-    const metadata = data.metadata ?? {};
+    const html = await fetchRes.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+
+    // Extract metadata
+    const title = doc?.querySelector("title")?.textContent?.trim() ??
+      extractMetaContent(doc, ["og:title", "twitter:title"]) ?? "";
+    const byline = extractMetaContent(doc, [
+      "author", "og:author", "article:author", "dc.creator", "twitter:creator",
+    ]) || null;
+    const siteName = extractMetaContent(doc, ["og:site_name"]) || null;
+    const language = extractMetaContent(doc, ["language"]) ||
+      (doc as unknown as { documentElement?: { getAttribute(n: string): string | null } })
+        ?.documentElement?.getAttribute("lang") || null;
+
+    // Extract main content
+    const contentEl = doc?.querySelector("article") ??
+      doc?.querySelector("main") ??
+      doc?.querySelector("[role='main']") ??
+      doc?.querySelector("body");
+
+    if (contentEl) {
+      for (const sel of ["script", "style", "nav", "header", "footer", "aside", "iframe", "noscript", "svg"]) {
+        for (const el of contentEl.querySelectorAll(sel)) {
+          el.remove();
+        }
+      }
+    }
+
+    const contentHtml = contentEl?.innerHTML ?? "";
+    const markdown = htmlToMarkdown(contentHtml);
+    const textContent = markdown.replace(/[#*`\[\]()>_~|\\-]/g, "");
 
     const result: ScrapeResult = {
-      title: metadata.title ?? "",
-      content: data.html ?? "",
-      markdown: data.markdown ?? "",
-      textContent: data.markdown?.replace(/[#*`\[\]()>_~|\\-]/g, "") ?? "",
-      byline: extractAuthor(metadata) || null,
-      siteName: metadata["og:site_name"] ?? metadata.ogSiteName ?? metadata.siteName ?? null,
-      language: metadata.language ?? null,
+      title,
+      content: contentHtml,
+      markdown,
+      textContent,
+      byline,
+      siteName,
+      language,
       sourceUrl: url,
     };
 

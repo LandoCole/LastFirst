@@ -199,7 +199,7 @@ async function generateDailyCuration(
 
   // Build tools subset for daily curation
   const tools = TOOL_DEFINITIONS.filter((t) =>
-    ["search_content", "search_web", "fetch_url", "get_user_reading_history", "get_content_details"].includes(t.name)
+    ["search_content", "fetch_url", "get_user_reading_history", "get_content_details"].includes(t.name)
   );
 
   const messages: { role: string; content: unknown }[] = [
@@ -217,7 +217,8 @@ async function generateDailyCuration(
       messages,
       "claude-sonnet-4-20250514",
       tools,
-      4096
+      4096,
+      true
     );
 
     if (result.toolCalls.length === 0) {
@@ -264,20 +265,22 @@ async function generateDailyCuration(
       return;
     }
 
-    // Process tool calls
+    // Process tool calls — preserve raw content blocks for web search compatibility
     messages.push({
       role: "assistant",
-      content: result.toolCalls.length > 0
-        ? [
-            ...(result.content ? [{ type: "text", text: result.content }] : []),
-            ...result.toolCalls.map((tc) => ({
-              type: "tool_use",
-              id: tc.id,
-              name: tc.name,
-              input: tc.input,
-            })),
-          ]
-        : result.content,
+      content: result.rawContent
+        ? result.rawContent
+        : result.toolCalls.length > 0
+          ? [
+              ...(result.content ? [{ type: "text", text: result.content }] : []),
+              ...result.toolCalls.map((tc) => ({
+                type: "tool_use",
+                id: tc.id,
+                name: tc.name,
+                input: tc.input,
+              })),
+            ]
+          : result.content,
     });
 
     for (const tc of result.toolCalls) {

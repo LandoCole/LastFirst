@@ -12,6 +12,7 @@ export interface NormalizedLLMResponse {
   toolCalls: ToolCall[];
   stopReason: string;
   usage?: { input_tokens: number; output_tokens: number };
+  rawContent?: Record<string, unknown>[];
 }
 
 export interface ToolCall {

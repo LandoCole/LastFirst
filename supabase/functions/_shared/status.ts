@@ -24,7 +24,6 @@ export async function emitStatus(
 export function toolDisplayName(toolName: string): string {
   const names: Record<string, string> = {
     search_content: "Searching library",
-    search_web: "Searching the web",
     fetch_url: "Reading page",
     get_content_details: "Getting details",
     get_user_reading_history: "Reviewing reading history",

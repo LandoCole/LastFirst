@@ -1,6 +1,7 @@
 // Shared tool execution for curator edge functions
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.48/deno-dom-wasm.ts";
 
 // --- Tool Definitions ---
 
@@ -28,19 +29,6 @@ export const TOOL_DEFINITIONS = [
         content_id: { type: "string", description: "UUID of the content item" },
       },
       required: ["content_id"],
-    },
-  },
-  {
-    name: "search_web",
-    description:
-      "Search the web for books, articles, papers, or other reading material. Returns titles, URLs, and snippets.",
-    input_schema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Search query" },
-        num_results: { type: "number", description: "Number of results (default 5)" },
-      },
-      required: ["query"],
     },
   },
   {
@@ -97,7 +85,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "ingest_url",
     description:
-      "Ingest a URL into the content library using Firecrawl, making it available as a library item.",
+      "Ingest a URL into the content library, making it available as a library item.",
     input_schema: {
       type: "object",
       properties: {
@@ -120,9 +108,7 @@ export function getSubagentTools(role: string) {
         ["search_content", "get_content_details"].includes(t.name)
       );
     case "web_researcher":
-      return TOOL_DEFINITIONS.filter((t) =>
-        ["search_web", "fetch_url"].includes(t.name)
-      );
+      return TOOL_DEFINITIONS.filter((t) => t.name === "fetch_url");
     default:
       return TOOL_DEFINITIONS;
   }
@@ -154,8 +140,6 @@ export async function executeTool(
       return await searchContent(supabase, input);
     case "get_content_details":
       return await getContentDetails(supabase, input);
-    case "search_web":
-      return await searchWeb(input);
     case "fetch_url":
       return await fetchUrl(input);
     case "get_user_reading_history":
@@ -179,6 +163,102 @@ function sanitizePostgrestValue(value: string): string {
     .replace(/,/g, "\\,")
     .replace(/\(/g, "\\(")
     .replace(/\)/g, "\\)");
+}
+
+// --- Scraping Helpers ---
+
+interface ScrapeOutput {
+  title: string;
+  author: string;
+  markdown: string;
+  html: string;
+  metadata: Record<string, string>;
+}
+
+async function scrapeUrl(url: string): Promise<ScrapeOutput> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; LastFirst/1.0)" },
+    redirect: "follow",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const html = await res.text();
+
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  if (!doc) throw new Error("Failed to parse HTML");
+
+  // Extract metadata from <meta> tags
+  const metadata: Record<string, string> = {};
+  for (const meta of doc.querySelectorAll("meta")) {
+    const name = (meta as unknown as Element).getAttribute("name") ??
+      (meta as unknown as Element).getAttribute("property") ?? "";
+    const content = (meta as unknown as Element).getAttribute("content") ?? "";
+    if (name && content) metadata[name] = content;
+  }
+
+  // Extract title
+  const title = doc.querySelector("title")?.textContent?.trim() ??
+    metadata["og:title"] ?? metadata["twitter:title"] ?? "";
+
+  // Extract author
+  const author = metadata["author"] ?? metadata["og:author"] ??
+    metadata["article:author"] ?? metadata["dc.creator"] ??
+    metadata["twitter:creator"] ?? "";
+
+  // Simple readability: extract main content element
+  const contentEl = doc.querySelector("article") ??
+    doc.querySelector("main") ??
+    doc.querySelector("[role='main']") ??
+    doc.querySelector("body");
+
+  // Remove unwanted elements
+  if (contentEl) {
+    const removeSelectors = [
+      "script", "style", "nav", "header", "footer", "aside",
+      "iframe", "noscript", "svg",
+    ];
+    for (const sel of removeSelectors) {
+      for (const el of contentEl.querySelectorAll(sel)) {
+        el.remove();
+      }
+    }
+  }
+
+  const contentHtml = contentEl?.innerHTML ?? "";
+  const markdown = htmlToMarkdown(contentHtml);
+
+  return { title, author, markdown, html: contentHtml, metadata };
+}
+
+function htmlToMarkdown(html: string): string {
+  let md = html;
+  // Convert headings
+  md = md.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, "# $1\n\n");
+  md = md.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, "## $1\n\n");
+  md = md.replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, "### $1\n\n");
+  md = md.replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, "#### $1\n\n");
+  md = md.replace(/<h5[^>]*>([\s\S]*?)<\/h5>/gi, "##### $1\n\n");
+  md = md.replace(/<h6[^>]*>([\s\S]*?)<\/h6>/gi, "###### $1\n\n");
+  // Convert bold and italic
+  md = md.replace(/<(strong|b)>([\s\S]*?)<\/(strong|b)>/gi, "**$2**");
+  md = md.replace(/<(em|i)>([\s\S]*?)<\/(em|i)>/gi, "*$2*");
+  // Convert links
+  md = md.replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "[$2]($1)");
+  // Convert paragraphs
+  md = md.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, "$1\n\n");
+  // Convert line breaks
+  md = md.replace(/<br\s*\/?>/gi, "\n");
+  // Convert list items
+  md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n");
+  // Convert blockquotes
+  md = md.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, "> $1\n\n");
+  // Strip remaining tags
+  md = md.replace(/<[^>]*>/g, "");
+  // Clean up whitespace
+  md = md.replace(/\n{3,}/g, "\n\n").trim();
+  // Decode HTML entities
+  md = md.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ");
+  return md;
 }
 
 // --- Tool Implementations ---
@@ -217,85 +297,17 @@ async function getContentDetails(
   return JSON.stringify(data);
 }
 
-async function searchWeb(input: Record<string, unknown>): Promise<string> {
-  const query = String(input.query ?? "");
-  const limit = Number(input.num_results ?? 5);
-
-  const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!firecrawlKey) return JSON.stringify({ error: "FIRECRAWL_API_KEY not set" });
-
-  const res = await fetch("https://api.firecrawl.dev/v2/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${firecrawlKey}`,
-    },
-    body: JSON.stringify({ query, limit }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    console.error("[searchWeb] Firecrawl search error:", res.status, body);
-    return JSON.stringify({ error: `Firecrawl search error: ${res.status}` });
-  }
-
-  const data = await res.json();
-  const results = (data.data ?? []).map(
-    (item: { title: string; url: string; description: string }) => ({
-      title: item.title,
-      url: item.url,
-      snippet: item.description,
-    })
-  );
-
-  return JSON.stringify({ results, count: results.length });
-}
-
 async function fetchUrl(input: Record<string, unknown>): Promise<string> {
   const url = String(input.url ?? "");
 
-  // Use Firecrawl for extraction
-  const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
-  if (firecrawlKey) {
-    try {
-      const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${firecrawlKey}`,
-        },
-        body: JSON.stringify({ url, formats: ["markdown"] }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const doc = data.data ?? {};
-        return JSON.stringify({
-          title: doc.metadata?.title ?? "",
-          author: extractAuthor(doc.metadata ?? {}),
-          content: (doc.markdown ?? "").slice(0, 3000),
-          url,
-        });
-      } else {
-        console.error("[fetchUrl] Firecrawl non-OK response:", res.status, await res.text());
-      }
-    } catch (e) {
-      console.error("[fetchUrl] Firecrawl failed:", e);
-    }
-  }
-
-  // Basic fetch fallback
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "LastFirst-Curator/1.0" },
-    });
-    const text = await res.text();
-    // Extract title from HTML
-    const titleMatch = text.match(/<title[^>]*>(.*?)<\/title>/i);
+    const scraped = await scrapeUrl(url);
     return JSON.stringify({
-      title: titleMatch?.[1]?.trim() ?? "",
-      content: text.replace(/<[^>]*>/g, "").slice(0, 3000),
+      title: scraped.title,
+      author: scraped.author,
+      content: scraped.markdown.slice(0, 4000),
       url,
+      readable: scraped.markdown.length > 200,
     });
   } catch (e) {
     return JSON.stringify({ error: `Failed to fetch: ${String(e)}` });
@@ -383,34 +395,12 @@ async function ingestUrl(
   input: Record<string, unknown>
 ): Promise<string> {
   const url = String(input.url ?? "");
-  const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!firecrawlKey) return JSON.stringify({ error: "FIRECRAWL_API_KEY not set" });
 
   try {
-    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${firecrawlKey}`,
-      },
-      body: JSON.stringify({ url, formats: ["markdown", "html"] }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      console.error("[ingestUrl] Firecrawl error:", res.status, body);
-      return JSON.stringify({ error: `Firecrawl error: ${res.status}` });
-    }
-
-    const data = await res.json();
-    const doc = data.data ?? {};
-    const metadata = doc.metadata ?? {};
-    const markdown = doc.markdown ?? "";
-    const html = doc.html ?? "";
-    const title = String(input.title ?? metadata.title ?? "");
-    const author = String(input.author ?? "") || extractAuthor(metadata);
-    const language = metadata.language ?? "en";
-    const wordCount = markdown.split(/\s+/).filter(Boolean).length;
+    const scraped = await scrapeUrl(url);
+    const title = String(input.title ?? "") || scraped.title;
+    const author = String(input.author ?? "") || scraped.author;
+    const wordCount = scraped.markdown.split(/\s+/).filter(Boolean).length;
     const estimatedReadMinutes = Math.max(1, Math.round(wordCount / 238));
 
     // Persist to content table
@@ -424,15 +414,15 @@ async function ingestUrl(
             source_url: url,
             title,
             author: author || null,
-            summary: markdown.slice(0, 500),
-            body_text: markdown,
-            body_html: html,
-            language,
+            summary: scraped.markdown.slice(0, 500),
+            body_text: scraped.markdown,
+            body_html: scraped.html,
+            language: scraped.metadata["language"] ?? scraped.metadata["og:locale"] ?? "en",
             word_count: wordCount,
             estimated_read_minutes: estimatedReadMinutes,
             file_type: "web",
             is_available: true,
-            metadata: metadata,
+            metadata: scraped.metadata,
           },
           { onConflict: "source_url" }
         )
@@ -453,24 +443,11 @@ async function ingestUrl(
       content_id: contentId,
       title,
       author,
-      content_preview: markdown.slice(0, 500),
+      content_preview: scraped.markdown.slice(0, 500),
       url,
     });
   } catch (e) {
     console.error("[ingestUrl] Ingest failed:", e);
     return JSON.stringify({ error: `Ingest failed: ${String(e)}` });
   }
-}
-
-// --- Helpers ---
-
-function extractAuthor(metadata: Record<string, unknown>): string {
-  return String(
-    metadata?.author ??
-    metadata?.["og:author"] ??
-    metadata?.["article:author"] ??
-    metadata?.["dc.creator"] ??
-    metadata?.["twitter:creator"] ??
-    ""
-  );
 }
