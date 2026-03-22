@@ -215,7 +215,7 @@ class CuratorChatService:
         )
 
         # Clarification gate
-        logger.info("[clarification] Gate: complexity=%s, skip=%s", classification.complexity, skip_clarification)
+        print(f"[clarification] Gate: complexity={classification.complexity}, skip={skip_clarification}")
         if classification.complexity != "simple" and not skip_clarification:
             clarification = await self._generate_clarification_questions(effective_message, history)
             if clarification:
@@ -693,7 +693,7 @@ Respond with JSON:
     async def _generate_clarification_questions(
         self, message: str, history: list[dict[str, str]]
     ) -> dict[str, Any] | None:
-        logger.info("[clarification] Generating questions for: %s", message[:100])
+        print(f"[clarification] Generating questions for: {message[:100]}")
         try:
             context_summary = ""
             if len(history) > 1:
@@ -706,20 +706,20 @@ Respond with JSON:
                 model="claude-haiku-4-5-20251001",
                 max_tokens=1024,
             )
-            logger.info("[clarification] Raw LLM response: %s", result.content[:500])
+            print(f"[clarification] Raw LLM response: {result.content[:500]}")
             cleaned = result.content.replace("```json", "").replace("```", "").strip()
             parsed = json.loads(cleaned)
             questions = parsed.get("questions", [])
             if not questions:
-                logger.warning("[clarification] LLM returned no questions")
+                print("[clarification] LLM returned no questions")
                 return None
-            logger.info("[clarification] Generated %d questions", len(questions))
+            print(f"[clarification] Generated {len(questions)} questions")
             return {
                 "intro": parsed.get("intro", "Before I start researching, a few quick questions."),
                 "questions": [ClarificationQuestion(**q) for q in questions],
             }
         except Exception as exc:
-            logger.error("[clarification] Failed: %s", exc, exc_info=True)
+            print(f"[clarification] Failed: {exc}")
             return None
 
     @staticmethod
