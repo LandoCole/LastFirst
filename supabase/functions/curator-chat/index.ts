@@ -253,7 +253,52 @@ serve(async (req: Request) => {
       throw new HttpError(403, "Authenticated user does not match the curator request");
     }
 
-    // Delegate to Railway agent service if configured
+    // --- Clarification (runs BEFORE Python delegation) ---
+
+    // Handle clarification response: enrich query and delegate
+    const clarResponse = parseClarificationResponse(message);
+    if (clarResponse) {
+      const enrichedMessage = buildEnrichedQuery(clarResponse);
+      const delegated = await invokeExternalCuratorChat(
+        req,
+        { ...body, message: enrichedMessage },
+        authenticatedUserId
+      );
+      if (delegated) return delegated;
+    }
+
+    // New curation (first message): ask Claude for clarification questions
+    if (!body.curation_id && !clarResponse) {
+      const clarification = await generateClarificationQuestions(message, []);
+      if (clarification && clarification.questions.length > 0) {
+        const supabase = createSupabaseClient();
+        const curationId = await getOrCreateCuration(
+          supabase,
+          { ...body, message, user_id: authenticatedUserId },
+          authenticatedUserId
+        );
+        await saveUserMessage(supabase, curationId, message);
+        await supabase.from("curation_messages").insert({
+          curation_id: curationId,
+          role: "assistant",
+          content: clarification.intro,
+        });
+
+        return new Response(
+          JSON.stringify({
+            curation_id: curationId,
+            response: clarification.intro,
+            clarification_questions: clarification.questions,
+            complexity: "moderate",
+            agent_count: 1,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      // No questions needed (specific query) — fall through to delegation
+    }
+
+    // --- Delegate to Railway agent service ---
     const delegatedResponse = await invokeExternalCuratorChat(
       req,
       { ...body, message },
