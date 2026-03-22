@@ -52,7 +52,8 @@ Response format:
 CLARIFICATION_PROMPT = """You generate clarification questions for a reading curation agent. Given a user's query, produce 1-3 follow-up questions that would help narrow down the best recommendations.
 
 Rules:
-- Questions should be specific to the user's query, NOT generic
+- If the query is already very specific (asks for a single title, author, or very narrow topic), return {"intro": "", "questions": []} — no clarification needed
+- Otherwise, generate 1-3 questions specific to the user's query, NOT generic
 - Each question has 2-4 options with short labels (2-4 words) and optional emoji
 - selection_type: "single" when choices are mutually exclusive, "multi" when the user might want several
 - Do NOT ask about topics the user already specified
@@ -214,9 +215,10 @@ class CuratorChatService:
             {"complexity": classification.complexity, "agent_count": total_agents},
         )
 
-        # Clarification gate
-        print(f"[clarification] Gate: complexity={classification.complexity}, skip={skip_clarification}")
-        if classification.complexity != "simple" and not skip_clarification:
+        # Clarification gate — always attempt for first message in a curation
+        is_first_message = len(history) <= 1
+        print(f"[clarification] Gate: complexity={classification.complexity}, skip={skip_clarification}, first_msg={is_first_message}")
+        if is_first_message and not skip_clarification:
             clarification = await self._generate_clarification_questions(effective_message, history)
             if clarification:
                 self._repository.insert_curation_message(
