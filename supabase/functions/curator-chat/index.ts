@@ -308,7 +308,7 @@ serve(async (req: Request) => {
       .eq("id", curationId);
 
     // Clarification gate: ask follow-up questions before researching
-    if (classification.needs_clarification && !skipClarification) {
+    if (classification.complexity !== "simple" && !skipClarification) {
       const clarification = await generateClarificationQuestions(effectiveMessage, history);
       if (clarification && clarification.questions.length > 0) {
         // Save intro as assistant message

@@ -212,7 +212,7 @@ class CuratorChatService:
         )
 
         # Clarification gate
-        if classification.needs_clarification and not skip_clarification:
+        if classification.complexity != "simple" and not skip_clarification:
             clarification = await self._generate_clarification_questions(effective_message, history)
             if clarification:
                 self._repository.insert_curation_message(
