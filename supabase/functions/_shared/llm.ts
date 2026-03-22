@@ -20,9 +20,9 @@ export function resolveModelId(model: string, provider: LLMProvider): string {
   if (!trimmed) {
     switch (provider) {
       case "openai":
-        return "gpt-4o";
+        return "gpt-5.4-nano";
       case "google":
-        return "gemini-2.0-flash";
+        return "gemini-3.1-flash-lite";
       case "anthropic":
       default:
         return "claude-sonnet-4-20250514";
@@ -32,9 +32,9 @@ export function resolveModelId(model: string, provider: LLMProvider): string {
   const lower = trimmed.toLowerCase();
   switch (provider) {
     case "openai":
-      return lower.includes("gpt") ? trimmed : "gpt-4o";
+      return lower.includes("gpt") ? trimmed : "gpt-5.4-nano";
     case "google":
-      return lower.includes("gemini") ? trimmed : "gemini-2.0-flash";
+      return lower.includes("gemini") ? trimmed : "gemini-3.1-flash-lite";
     case "anthropic":
     default:
       return lower.includes("claude") ? trimmed : "claude-sonnet-4-20250514";
@@ -146,7 +146,7 @@ export async function callAnthropic(
 export async function callOpenAI(
   systemPrompt: string,
   messages: { role: string; content: unknown }[],
-  model = "gpt-4o",
+  model = "gpt-5.4-nano",
   tools?: ToolDefinition[],
   maxTokens = 4096,
   enableWebSearch = false
@@ -155,8 +155,7 @@ export async function callOpenAI(
   if (!apiKey) throw new Error("OPENAI_API_KEY not set");
 
   if (enableWebSearch) {
-    if (model.includes("gpt-4o-mini")) model = "gpt-4o-mini-search-preview";
-    else model = "gpt-4o-search-preview";
+    // gpt-5.4-nano supports web search natively, no model swap needed
   }
 
   const oaiMessages = [
@@ -214,7 +213,7 @@ export async function callOpenAI(
 export async function callGemini(
   systemPrompt: string,
   messages: { role: string; content: unknown }[],
-  model = "gemini-2.0-flash",
+  model = "gemini-3.1-flash-lite",
   tools?: ToolDefinition[],
   maxTokens = 4096,
   enableWebSearch = false

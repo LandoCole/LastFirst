@@ -3,14 +3,14 @@ import MarkdownUI
 
 enum CuratorAIModel: String, CaseIterable {
     case claude = "Claude"
-    case gpt4o = "GPT-4o"
-    case gemini = "Gemini"
+    case gpt4o = "GPT-5.4 Nano"
+    case gemini = "Gemini 3.1 Flash-Lite"
 
     var apiValue: String {
         switch self {
         case .claude: return "claude-sonnet-4-20250514"
-        case .gpt4o: return "gpt-4o"
-        case .gemini: return "gemini-2.0-flash"
+        case .gpt4o: return "gpt-5.4-nano"
+        case .gemini: return "gemini-3.1-flash-lite"
         }
     }
 }
@@ -71,6 +71,15 @@ struct CuratorView: View {
             inputBar
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 20)
+                        .onEnded { value in
+                            if value.translation.height > 30
+                                && abs(value.translation.height) > abs(value.translation.width) {
+                                isInputFocused = false
+                            }
+                        }
+                )
         }
         .background(Color(.systemBackground).ignoresSafeArea())
         .sheet(isPresented: $showHistory) {
@@ -229,6 +238,7 @@ struct CuratorView: View {
                 }
                 .padding(.vertical, 12)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: viewModel.messages.count) {
                 withAnimation {
                     if let lastId = viewModel.messages.last?.id {
@@ -507,41 +517,33 @@ struct CuratorView: View {
                     .frame(height: 36)
             } else {
 
-            ZStack(alignment: .trailing) {
+            HStack(spacing: 6) {
                 TextField("Ask Curator", text: $inputText)
                     .font(.system(size: 14))
-                    .padding(.horizontal, 14)
-                    .padding(.trailing, inputText.isEmpty ? 0 : 28)
+                    .padding(.leading, 14)
                     .frame(height: 36)
                     .focused($isInputFocused)
                     .tint(Color(hex: "463F3A"))
                     .onSubmit { sendMessage() }
 
-                if !inputText.isEmpty {
-                    Button {
-                        inputText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.trailing, 12)
+                Button {
+                    sendMessage()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(inputText.isEmpty || viewModel.isLoading
+                                    ? Color.secondary
+                                    : Color(hex: "B17E25"))
+                        )
                 }
+                .disabled(inputText.isEmpty || viewModel.isLoading)
+                .padding(.trailing, 4)
             }
             .glassStyle(shape: .pill)
-
-            Button {
-                sendMessage()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(
-                        inputText.isEmpty || viewModel.isLoading
-                            ? Color.secondary
-                            : Color(hex: "B17E25")
-                    )
-            }
-            .disabled(inputText.isEmpty || viewModel.isLoading)
 
             } // end else (not clarification)
         }
