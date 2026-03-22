@@ -155,18 +155,18 @@ Be conversational but efficient. Always search before recommending. Prefer libra
 const CLASSIFIER_PROMPT = `You classify user queries for a reading curation agent. Respond with ONLY valid JSON.
 
 Categories:
-- SIMPLE: Direct lookup or single known item. "Find The Art of War", "Do we have any Hemingway?"
-- MODERATE: Topic-based search, single domain. "Find me articles about stoicism", "Recommend philosophy books"
-- COMPLEX: Multi-topic, cross-domain, research-intensive. "Research the intersection of AI and philosophy — books, papers, and articles"
+- SIMPLE: ONLY for requests for a single specific title or author. Examples: "Find The Art of War", "Do we have any Hemingway?", "Get me Sapiens by Yuval Noah Harari"
+- MODERATE: Any topic-based or exploratory query. This is the DEFAULT for most queries. Examples: "Find me things to read about mars", "Recommend philosophy books", "Articles about stoicism", "Something about AI", "Good books on leadership"
+- COMPLEX: Multi-topic, cross-domain, or research-intensive. Examples: "Research the intersection of AI and philosophy — books, papers, and articles", "Compare different schools of thought on consciousness"
+
+IMPORTANT: If in doubt between SIMPLE and MODERATE, choose MODERATE. Only use SIMPLE when the user names a specific title or asks for a specific author's works.
 
 For MODERATE/COMPLEX, decompose into focused subqueries with roles:
 - library_searcher: searches internal content catalog
 - web_researcher: finds external content on the web
 
-Also determine if the query would benefit from clarification questions before researching. Set "needs_clarification": true when the query is broad or ambiguous, or when user preferences (content type, length, difficulty, format, etc.) would significantly improve results. Set false when the query is specific, the user already provided clear constraints, or this is a follow-up in an existing conversation with established context.
-
 Response format:
-{"complexity":"simple|moderate|complex","needs_clarification":true|false,"subqueries":[{"role":"library_searcher|web_researcher","query":"focused query"}],"reasoning":"brief explanation"}`;
+{"complexity":"simple|moderate|complex","subqueries":[{"role":"library_searcher|web_researcher","query":"focused query"}],"reasoning":"brief explanation"}`;
 
 const CLARIFICATION_PROMPT = `You generate clarification questions for a reading curation agent. Given a user's query, produce 1-3 follow-up questions that would help narrow down the best recommendations.
 
