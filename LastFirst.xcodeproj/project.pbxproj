@@ -27,6 +27,7 @@
 		475E339186C8C25CEAFD6001 /* BookCoverRibbon.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */; };
 		47C9DAE6092DD381EE1339A2 /* CurationCardStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1770FFEA952EB923C58DCA25 /* CurationCardStack.swift */; };
 		CC0A000000000001 /* ClarificationQuestionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0A000000000001 /* ClarificationQuestionsView.swift */; };
+		CC0B000000000001 /* CurationRequestForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0B000000000001 /* CurationRequestForm.swift */; };
 		4D0EA37BA2FE4E53EB6DAB8E /* FootnotePopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B6670672B4C19B12808860B /* FootnotePopoverView.swift */; };
 		5CB0E9ED2409A42BF1A68333 /* BookmarksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B1B9D9605C603338C590B7 /* BookmarksView.swift */; };
 		6394598283EABF385D69D51A /* CatalogItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */; };
@@ -112,7 +113,7 @@
 		E1000006 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = E3000001 /* Supabase */; };
 		E1000007 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = E3000002 /* MarkdownUI */; };
 		E6B2C3D4F5061728394A5B6C /* SummarizationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1B2C3E4F506718293A4B5 /* SummarizationSheet.swift */; };
-		EA07D4E60B430898A5166873 /* CatalogCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F4237EB4C8C567E698046E /* CatalogCoverView.swift */; };
+		CC10000000000010 /* CoverImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD10000000000010 /* CoverImageCache.swift */; };
 		EE09000000000009 /* CurationPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF09000000000009 /* CurationPreviewSheet.swift */; };
 		F2A5A084096D55401DF6DB52 /* NavigationTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E5232222ECDC75EF37CCB1B /* NavigationTab.swift */; };
 		F31B8C232D246342B53D7764 /* DotGridScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4BA89C81248C50F55DA95E2 /* DotGridScene.swift */; };
@@ -132,6 +133,7 @@
 		0F2708CBE2B2BC77B035F461 /* CatalogItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogItem.swift; sourceTree = "<group>"; };
 		1770FFEA952EB923C58DCA25 /* CurationCardStack.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationCardStack.swift; sourceTree = "<group>"; };
 		DD0A000000000001 /* ClarificationQuestionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClarificationQuestionsView.swift; sourceTree = "<group>"; };
+		DD0B000000000001 /* CurationRequestForm.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationRequestForm.swift; sourceTree = "<group>"; };
 		195ED0AA5E4C7E3A61E8778F /* ContentItem.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContentItem.swift; sourceTree = "<group>"; };
 		1B6670672B4C19B12808860B /* FootnotePopoverView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FootnotePopoverView.swift; sourceTree = "<group>"; };
 		1E5232222ECDC75EF37CCB1B /* NavigationTab.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NavigationTab.swift; sourceTree = "<group>"; };
@@ -191,7 +193,7 @@
 		B2DC33DC1B786A05E662830E /* SignupInterestsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignupInterestsView.swift; sourceTree = "<group>"; };
 		B8F64CAD2D624CFE59EA8898 /* DotMatrixView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DotMatrixView.swift; sourceTree = "<group>"; };
 		BDA7F1AAE88E64C7D37119FD /* FullTextSearchService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FullTextSearchService.swift; sourceTree = "<group>"; };
-		C1F4237EB4C8C567E698046E /* CatalogCoverView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CatalogCoverView.swift; sourceTree = "<group>"; };
+		DD10000000000010 /* CoverImageCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CoverImageCache.swift; sourceTree = "<group>"; };
 		C3A1B2D0E4F56789ABCD0002 /* ViewExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewExtensions.swift; sourceTree = "<group>"; };
 		C3D4E5F607182939405B6C7E /* CurationCreationViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CurationCreationViewModel.swift; sourceTree = "<group>"; };
 		C4RA70F1A0ED0001A0000002 /* CuratorPlanView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CuratorPlanView.swift; sourceTree = "<group>"; };
@@ -394,12 +396,12 @@
 				531EBD32CE4A61CF5799A87E /* MiniReaderBar.swift */,
 				A7D92A85F50F3F1FD4ED298D /* ContinueCard.swift */,
 				DD0A000000000001 /* ClarificationQuestionsView.swift */,
+				DD0B000000000001 /* CurationRequestForm.swift */,
 				1770FFEA952EB923C58DCA25 /* CurationCardStack.swift */,
 				C4RA70F1A0ED0001A0000002 /* CuratorPlanView.swift */,
 				32AF24ED35D01AC1B4D93F08 /* BookCoverView.swift */,
 				DC304549BB0B993DF10D2DCF /* BookCoverRibbon.swift */,
 				A3F441533B88BFD778E24768 /* ReadingStatsSection.swift */,
-				C1F4237EB4C8C567E698046E /* CatalogCoverView.swift */,
 				AA06000000000006 /* CurationFilterBar.swift */,
 				3CAE485C3AD236CD798AA573 /* DotMatrix */,
 			);
@@ -427,6 +429,7 @@
 				D9DC6D992EF31B637ED9502C /* ReadingMetricsSyncService.swift */,
 				DD08000000000008 /* CurationCardColorCache.swift */,
 				DD09000000000001 /* CurationItemCache.swift */,
+				DD10000000000010 /* CoverImageCache.swift */,
 				F9A200000000000000000002 /* TextVariantStoreActor.swift */,
 				F9A200000000000000000003 /* TextVariantService.swift */,
 			);
@@ -630,6 +633,7 @@
 				19A7C7E47C46567D8E16886E /* ContentItem.swift in Sources */,
 				47C9DAE6092DD381EE1339A2 /* CurationCardStack.swift in Sources */,
 				CC0A000000000001 /* ClarificationQuestionsView.swift in Sources */,
+				CC0B000000000001 /* CurationRequestForm.swift in Sources */,
 				C4RA70P1A0ED0001A0000001 /* CuratorPlanView.swift in Sources */,
 				44CB00732A966413E3FC5B5B /* BookCoverView.swift in Sources */,
 				475E339186C8C25CEAFD6001 /* BookCoverRibbon.swift in Sources */,
@@ -646,7 +650,6 @@
 				AA7E8F66547A3D1C5B0C16D6 /* CatalogViewModel.swift in Sources */,
 				0D1099546DDB3184BB29CB67 /* DailyCurationViewModel.swift in Sources */,
 				DAADB28FE64D17F2125EB4E3 /* CuratorViewModel.swift in Sources */,
-				EA07D4E60B430898A5166873 /* CatalogCoverView.swift in Sources */,
 				D3605C7DC4CF3FDFD031D628 /* CatalogPreviewSheet.swift in Sources */,
 				83467DFA727DC724FE4333F8 /* DotMatrixFonts.swift in Sources */,
 				F31B8C232D246342B53D7764 /* DotGridScene.swift in Sources */,
@@ -666,6 +669,7 @@
 				EE09000000000009 /* CurationPreviewSheet.swift in Sources */,
 				CC08000000000008 /* CurationCardColorCache.swift in Sources */,
 				CC09000000000001 /* CurationItemCache.swift in Sources */,
+				CC10000000000010 /* CoverImageCache.swift in Sources */,
 				F9B200000000000000000001 /* TextVariant.swift in Sources */,
 				F9B200000000000000000002 /* TextVariantStoreActor.swift in Sources */,
 				F9B200000000000000000003 /* TextVariantService.swift in Sources */,

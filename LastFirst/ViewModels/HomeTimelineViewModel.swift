@@ -71,8 +71,63 @@ class HomeTimelineViewModel: ObservableObject {
         isGeneratingToday && !hasReadyTodayCuration && pendingTodayCurationId != nil
     }
 
+    var shouldShowCurationForm: Bool {
+        hasResolvedInitialTimeline && !hasReadyTodayCuration && !isGeneratingToday
+    }
+
+    let curationFormPageId = UUID()
+
     init(userId: UUID) {
         self.userId = userId
+    }
+
+    // MARK: - User-Prompted Curation
+
+    func submitCurationRequest(prompt: String, model: String = "claude-sonnet-4-20250514") async {
+        isGeneratingToday = true
+        let formId = curationFormPageId
+
+        do {
+            let response = try await SupabaseManager.shared.sendCuratorMessage(
+                curationId: nil,
+                message: prompt,
+                model: model
+            )
+
+            pendingTodayCurationId = response.curationId
+
+            // Poll until ready
+            let maxPollDuration: TimeInterval = 300
+            let startTime = Date()
+
+            while !Task.isCancelled {
+                if Date().timeIntervalSince(startTime) > maxPollDuration {
+                    isGeneratingToday = false
+                    pendingTodayCurationId = nil
+                    return
+                }
+
+                if let curation = try? await SupabaseManager.shared.fetchCuration(id: response.curationId) {
+                    if curation.status == "ready" {
+                        await load()
+                        isGeneratingToday = false
+                        pendingTodayCurationId = nil
+                        return
+                    }
+                    if curation.status == "error" {
+                        isGeneratingToday = false
+                        pendingTodayCurationId = nil
+                        return
+                    }
+                }
+
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        } catch {
+            print("[HomeTimeline] Curation request failed: \(error)")
+            isGeneratingToday = false
+            pendingTodayCurationId = nil
+        }
     }
 
     func load() async {

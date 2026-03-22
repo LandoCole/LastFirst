@@ -150,6 +150,8 @@ When you find content via web search, use ingest_url to scrape the URL for real 
 
 Your chat response should be a brief research summary (2-4 sentences) about what you found and why these items are relevant. Do NOT list each item in detail -- the structured content cards will display that.
 
+Only recommend digital content available online: ePub files, PDF documents, and web articles/websites. Do NOT recommend physical books or content that requires purchasing a physical copy.
+
 Be conversational but efficient. Always search before recommending. Prefer library content when available, supplement with web finds.`;
 
 const CLASSIFIER_PROMPT = `You classify user queries for a reading curation agent. Respond with ONLY valid JSON.
