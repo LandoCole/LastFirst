@@ -13,6 +13,7 @@ struct HomeView: View {
     @State private var timelineVM: HomeTimelineViewModel?
     @State private var curationPreviewContext: CurationPreviewContext?
     @State private var showAccount: Bool = false
+    @State private var newCurationBounce = 0
     @Namespace private var homeGlassNamespace
 
     // Paging state
@@ -115,6 +116,22 @@ struct HomeView: View {
                     Text(currentSectionTitle)
                         .font(.hedvigLettersSerif(24))
                     Spacer()
+
+                    Button {
+                        newCurationBounce += 1
+                        if let vm = timelineVM {
+                            vm.resetTodayCuration()
+                            withAnimation {
+                                currentDayPage = vm.curationFormPageId
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .symbolEffect(.bounce, value: newCurationBounce)
+                    }
+                    .buttonStyle(.plain)
 
                     Button { showDatePicker = true } label: {
                         Image(systemName: "calendar")

@@ -77,6 +77,12 @@ class HomeTimelineViewModel: ObservableObject {
 
     let curationFormPageId = UUID()
 
+    func resetTodayCuration() {
+        dayCurations.removeAll(where: \.isToday)
+        isGeneratingToday = false
+        pendingTodayCurationId = nil
+    }
+
     init(userId: UUID) {
         self.userId = userId
     }
