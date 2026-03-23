@@ -14,7 +14,9 @@ struct ContinueCard: View {
                 coverImageData: appState.getCoverImage(for: item.documentId),
                 title: item.title,
                 iconName: item.coverIconName,
-                size: CGSize(width: 64, height: 83)
+                width: 54,
+                cornerRadius: 4,
+                contentType: item.coverContentType
             )
 
             VStack(alignment: .leading, spacing: 0) {

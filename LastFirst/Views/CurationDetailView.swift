@@ -105,8 +105,8 @@ struct CurationDetailView: View {
                 coverURL: item.curatedCoverURL,
                 title: item.title,
                 iconName: item.coverIconName,
-                size: CGSize(width: 160, height: 233),
-                flexibleAspectRatio: true
+                width: 160,
+                contentType: item.coverContentType
             )
             .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
             .frame(maxWidth: .infinity)
@@ -167,7 +167,7 @@ struct CurationDetailView: View {
                             coverURL: item.curatedCoverURL,
                             title: item.title,
                             iconName: item.coverIconName,
-                            size: CGSize(width: 40, height: 58),
+                            width: 40,
                             cornerRadius: 4
                         )
 

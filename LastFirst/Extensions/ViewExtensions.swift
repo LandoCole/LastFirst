@@ -112,7 +112,7 @@ private struct EdgeToEdgeFullScreenSheetContainer<SheetContent: View>: View {
                     content()
 
                     Capsule()
-                        .fill(Color.white.opacity(0.5))
+                        .fill(Color.primary.opacity(0.3))
                         .frame(width: 36, height: 5)
                         .padding(.top, topSafeArea + 6)
                         .allowsHitTesting(false)

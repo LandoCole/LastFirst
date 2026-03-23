@@ -136,12 +136,13 @@ struct BookPreviewSheet: View {
             // Cover image
             BookCoverView(
                 coverImageData: appState.getCoverImage(for: item.documentId),
+                coverURL: item.curatedCoverURL,
                 title: item.title,
                 iconName: item.coverIconName,
-                size: CGSize(width: 220, height: 330),
+                width: 220,
                 cornerRadius: 8,
                 ribbonState: item.ribbonState,
-                flexibleAspectRatio: true
+                contentType: item.coverContentType
             )
             .shadow(color: .black.opacity(0.4), radius: 16, y: 8)
 

@@ -4,6 +4,8 @@ struct CurationCardStack: View {
     let items: [CurationItem]
     var onSelectItem: ((CurationItem) -> Void)?
 
+    @Environment(\.colorScheme) var colorScheme
+
     var body: some View {
         TabView {
             ForEach(items) { item in
@@ -14,7 +16,11 @@ struct CurationCardStack: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: items.count > 1 ? .automatic : .never))
-        .frame(height: 140)
+        .frame(height: 160)
+        .onAppear {
+            UIPageControl.appearance().currentPageIndicatorTintColor = .label
+            UIPageControl.appearance().pageIndicatorTintColor = .secondaryLabel
+        }
     }
 
     private func curationCard(_ item: CurationItem) -> some View {
@@ -24,14 +30,15 @@ struct CurationCardStack: View {
                 coverURL: coverURL(for: item),
                 title: item.displayTitle,
                 iconName: coverIcon(for: item),
-                size: CGSize(width: 80, height: 116),
-                cornerRadius: 6
+                width: 80,
+                contentType: coverContentType(for: item)
             )
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(item.displayTitle)
                         .font(.rethinkSans(14, weight: .semibold))
+                        .foregroundStyle(colorScheme == .dark ? Color.primary : Color.warmForeground)
                         .lineLimit(2)
 
                     if let badge = availabilityBadge(for: item) {
@@ -63,7 +70,8 @@ struct CurationCardStack: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(Color.warmBackground)
+        .padding(.bottom, 4)
+        .background(colorScheme == .dark ? Color(UIColor.secondarySystemGroupedBackground) : Color.warmBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 4)
     }
@@ -77,6 +85,14 @@ struct CurationCardStack: View {
         case "epub": return "book.closed.fill"
         case "pdf": return "doc.fill"
         default: return "newspaper.fill"
+        }
+    }
+
+    private func coverContentType(for item: CurationItem) -> CoverContentType {
+        switch item.displayFileType {
+        case "epub": return .epub
+        case "pdf": return .pdf
+        default: return .article
         }
     }
 

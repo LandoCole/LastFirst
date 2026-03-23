@@ -134,8 +134,9 @@ struct MiniReaderBar: View {
             coverImageData: readerCoordinator.coverImageData,
             title: item?.title ?? "",
             iconName: item?.coverIconName ?? "book.closed.fill",
-            size: CGSize(width: 32, height: 32),
-            cornerRadius: 6
+            width: 32,
+            cornerRadius: 6,
+            aspectRatio: 1.0
         )
     }
 

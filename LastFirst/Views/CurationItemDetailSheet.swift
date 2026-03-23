@@ -20,8 +20,9 @@ struct CurationItemDetailSheet: View {
                 coverURL: coverURL,
                 title: item.displayTitle,
                 iconName: coverIcon,
-                size: CGSize(width: 160, height: 233),
-                cornerRadius: 8
+                width: 160,
+                cornerRadius: 8,
+                contentType: coverContentType
             )
             .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
             .padding(.top, 24)
@@ -246,6 +247,14 @@ struct CurationItemDetailSheet: View {
         case "epub": return "book.closed.fill"
         case "pdf": return "doc.fill"
         default: return "newspaper.fill"
+        }
+    }
+
+    private var coverContentType: CoverContentType {
+        switch item.displayFileType {
+        case "epub": return .epub
+        case "pdf": return .pdf
+        default: return .article
         }
     }
 

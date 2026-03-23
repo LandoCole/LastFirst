@@ -27,12 +27,14 @@ struct ContentView: View {
                     }
                 )
             }
+            .ignoresSafeArea(.keyboard)
             .opacity(selectedTab == .home ? 1 : 0)
             .allowsHitTesting(selectedTab == .home)
 
             NavigationStack {
                 LibraryView()
             }
+            .ignoresSafeArea(.keyboard)
             .opacity(selectedTab == .library ? 1 : 0)
             .allowsHitTesting(selectedTab == .library)
 
@@ -47,6 +49,7 @@ struct ContentView: View {
                     )
                         .padding(.bottom, 68)
                 }
+                .ignoresSafeArea(.keyboard)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(7)
             }
@@ -63,7 +66,7 @@ struct ContentView: View {
                         .simultaneousGesture(readerDismissGesture)
 
                     Capsule()
-                        .fill(Color.white.opacity(0.5))
+                        .fill(Color.primary.opacity(0.3))
                         .frame(width: 36, height: 5)
                         .padding(.top, topSafeArea + 6)
                         .offset(y: presentedReaderYOffset)
@@ -78,6 +81,7 @@ struct ContentView: View {
                 Spacer()
                 bottomBar
             }
+            .ignoresSafeArea(.keyboard)
             .zIndex(8)
 
             // Curator overlay (in-ZStack for matchedGeometryEffect morph)
@@ -85,22 +89,21 @@ struct ContentView: View {
                 ZStack(alignment: .top) {
                     curatorSheetContent
                         .matchedGeometryEffect(id: "curatorSurface", in: curatorTransitionNamespace)
-                        .ignoresSafeArea()
+                        .ignoresSafeArea(.container)
                         .offset(y: max(0, curatorDragOffset))
                         .simultaneousGesture(curatorDismissGesture)
 
                     Capsule()
-                        .fill(Color.white.opacity(0.5))
+                        .fill(Color.primary.opacity(0.3))
                         .frame(width: 36, height: 5)
                         .padding(.top, topSafeArea + 6)
                         .offset(y: max(0, curatorDragOffset))
                         .allowsHitTesting(false)
                 }
-                .ignoresSafeArea()
+                .ignoresSafeArea(.container)
                 .zIndex(15)
             }
         }
-        .ignoresSafeArea(.keyboard)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: readerCoordinator.presentationState)
         .animation(.spring(response: 0.42, dampingFraction: 0.86), value: showCuratorSheet)
     }

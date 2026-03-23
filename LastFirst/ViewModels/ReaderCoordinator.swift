@@ -85,6 +85,7 @@ class ReaderCoordinator: ObservableObject {
     @Published private(set) var backgroundActivityPhase: ReaderActivityPhase?
     @Published private(set) var completionBannerText: String?
     @Published var activeVariant: TextVariant?
+    var loadedTextVariantPackage: TextVariantPackage?
 
     private(set) var metricsTracker: ReadingMetricsTracker?
     private var loadingTask: Task<Void, Never>?
@@ -260,6 +261,14 @@ class ReaderCoordinator: ObservableObject {
 
             appState.populateFootnotes(from: packages, documentId: item.documentId)
             appState.loadPendingImages(for: item.documentId)
+
+            // Mark content as downloaded so the ribbon fills in
+            if item.downloadState != .downloaded {
+                var updatedItem = item
+                updatedItem.downloadState = .downloaded
+                appState.updateItem(updatedItem)
+            }
+
             showDoneBanner()
 
         } catch {
@@ -478,6 +487,10 @@ class ReaderCoordinator: ObservableObject {
     }
 
     // MARK: - Text Variant Support
+
+    func unitIDForChapter(_ chapter: Chapter) -> String? {
+        unitIDByChapterID[chapter.id]
+    }
 
     func applyVariant(_ variant: TextVariant, modifiedPackages: CanonicalDocumentPackages, appState: AppState? = nil) {
         guard let vm = viewModel,

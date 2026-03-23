@@ -24,11 +24,16 @@ struct ReadingView: View {
     enum BottomBarTab: Equatable {
         case none       // Normal spritz/stream view
         case browse     // ReaderScrollView
-        case sparkle    // Placeholder view
+        case sparkle    // AI features menu
         case bookmarks  // Inline bookmarks list
     }
     @State private var activeBottomTab: BottomBarTab = .none
     @State private var browseControlsVisible: Bool = true
+
+    // AI text mode state
+    @State private var activeAIMode: AITextMode = .original
+    @State private var processingAIMode: AITextMode? = nil
+    @State private var readyAIModes: Set<AITextMode> = []
 
     // Artifacts tab routing
     @State private var artifactsInitialTab: ArtifactsView.ArtifactTab? = nil
@@ -55,6 +60,13 @@ struct ReadingView: View {
     // Convenience: whether a bottom tab is active (dial/progress should collapse)
     private var isBottomTabActive: Bool {
         activeBottomTab != .none
+    }
+
+    private var topSafeArea: CGFloat {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+            let window = windowScene.windows.first else { return 59 }
+        return window.safeAreaInsets.top
     }
 
     private var presentationVerticalOffset: CGFloat {
@@ -88,12 +100,14 @@ struct ReadingView: View {
                 }
                 .onChange(of: viewModel.readingMode) { _, _ in
                     resetDialActivityTimer()
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        activeBottomTab = .none
+                    if processingAIMode == nil {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            activeBottomTab = .none
+                        }
                     }
                 }
                 .onChange(of: viewModel.isPlaying) { _, isPlaying in
-                    if isPlaying {
+                    if isPlaying && processingAIMode == nil {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             activeBottomTab = .none
                         }
@@ -418,6 +432,7 @@ struct ReadingView: View {
 
     private func bottomTabButton(systemName: String, tab: BottomBarTab) -> some View {
         let isActive = activeBottomTab == tab
+        let isLocked = processingAIMode != nil
         return Button(action: {
             withAnimation(.easeInOut(duration: 0.25)) {
                 if activeBottomTab == tab {
@@ -429,11 +444,12 @@ struct ReadingView: View {
         }) {
             Image(systemName: systemName)
                 .font(.system(size: 22, weight: isActive ? .semibold : .medium))
-                .foregroundColor(isActive ? resolvedTheme.textColor : resolvedTheme.secondaryTextColor.opacity(0.6))
+                .foregroundColor(isActive ? resolvedTheme.textColor : resolvedTheme.secondaryTextColor.opacity(isLocked && !isActive ? 0.2 : 0.6))
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
         }
         .buttonStyle(.plain)
+        .disabled(isLocked && !isActive)
     }
 
     // MARK: - Loading Overlay
@@ -671,7 +687,17 @@ struct ReadingView: View {
                     .transition(.opacity)
 
                 case .sparkle:
-                    sparklePlaceholderView
+                    AIFeaturesMenuView(
+                        theme: resolvedTheme,
+                        bookTitle: item.title,
+                        chapterTitle: viewModel.currentChapter?.title ?? "",
+                        progressPercent: Int(item.progress.percentComplete),
+                        activeMode: activeAIMode,
+                        processingMode: processingAIMode,
+                        readyModes: readyAIModes,
+                        onSelectMode: { mode, scope in handleAITextModeSelection(mode, scope: scope) },
+                        onRecapSession: { handleRecapSession() }
+                    )
                     .transition(.opacity)
 
                 case .bookmarks:
@@ -697,6 +723,7 @@ struct ReadingView: View {
                     }
                 }
             }
+            .padding(.top, topSafeArea + 48)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, streamModePaddingValue)
 
@@ -793,23 +820,6 @@ struct ReadingView: View {
                 chapterSwipeDragOffset = 0
             }
         }
-    }
-
-    private var sparklePlaceholderView: some View {
-        VStack(spacing: 12) {
-            Spacer()
-
-            Image(systemName: "sparkles")
-                .font(.system(size: 28, weight: .medium))
-                .foregroundColor(resolvedTheme.secondaryTextColor.opacity(0.8))
-
-            Text(".sparkle placeholder view")
-                .font(.headline)
-                .foregroundColor(resolvedTheme.textColor)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Inline Bookmarks View
@@ -1009,6 +1019,183 @@ struct ReadingView: View {
         let previousIndex = currentIndex - 1
         guard previousIndex >= 0, previousIndex < viewModel.chapters.count else { return nil }
         return viewModel.chapters[previousIndex]
+    }
+
+    // MARK: - AI Text Mode Handlers
+
+    private func handleAITextModeSelection(_ mode: AITextMode, scope: SummaryScope?) {
+        switch mode {
+        case .original:
+            readerCoordinator.revertToOriginal(appState: appState)
+            activeAIMode = .original
+
+        case .optimized:
+            if readyAIModes.contains(.optimized) || readerCoordinator.speedCleanPackage != nil {
+                readerCoordinator.toggleSpeedClean(appState: appState)
+                activeAIMode = (activeAIMode == .optimized) ? .original : .optimized
+                readyAIModes.insert(.optimized)
+            } else {
+                readerCoordinator.toggleSpeedClean(appState: appState)
+                activeAIMode = .optimized
+                readyAIModes.insert(.optimized)
+            }
+
+        case .easyRead:
+            Task {
+                if let existing = await findExistingVariant(named: "Easy Read") {
+                    applyExistingVariant(existing)
+                    activeAIMode = .easyRead
+                    readyAIModes.insert(.easyRead)
+                } else {
+                    processCustomVariant(mode: .easyRead, scope: .chapter)
+                }
+            }
+
+        case .quickSummary:
+            let resolvedScope = scope ?? .chapter
+            Task {
+                if resolvedScope == .chapter, let existing = await findExistingVariant(named: "Quick Summary") {
+                    applyExistingVariant(existing)
+                    activeAIMode = .quickSummary
+                    readyAIModes.insert(.quickSummary)
+                } else {
+                    processCustomVariant(mode: .quickSummary, scope: resolvedScope)
+                }
+            }
+        }
+    }
+
+    private func findExistingVariant(named name: String) async -> TextVariant? {
+        guard let chapter = viewModel.currentChapter,
+              let unitID = readerCoordinator.unitIDForChapter(chapter) else { return nil }
+
+        // Layer 1: In-memory
+        if let package = readerCoordinator.loadedTextVariantPackage,
+           let match = package.variants.first(where: { $0.name == name && $0.unitID == unitID && $0.status == .ready }) {
+            return match
+        }
+
+        // Layer 2 & 3: Local disk, then Supabase (handled inside loadVariants)
+        if let package = await TextVariantService.shared.loadVariants(documentId: item.documentId) {
+            await MainActor.run {
+                readerCoordinator.loadedTextVariantPackage = package
+            }
+            return package.variants.first { $0.name == name && $0.unitID == unitID && $0.status == .ready }
+        }
+
+        return nil
+    }
+
+    private func applyExistingVariant(_ variant: TextVariant) {
+        guard let canonicalPackages = readerCoordinator.canonicalPackages else { return }
+        Task {
+            let modifiedPackages = await TextVariantService.shared.apply(variant: variant, to: canonicalPackages)
+            await MainActor.run {
+                readerCoordinator.applyVariant(variant, modifiedPackages: modifiedPackages, appState: appState)
+            }
+        }
+    }
+
+    private func processCustomVariant(mode: AITextMode, scope: SummaryScope) {
+        processingAIMode = mode
+        Task {
+            let instructions = mode == .easyRead
+                ? "Rewrite this text in clear, approachable, plain language. Preserve the original meaning and approximately the same length. Do not summarize or condense."
+                : "Condense this to exactly what the reader needs to know. Be concise and easily digestible. Preserve key facts and meaning."
+
+            if scope == .entireBook {
+                await processAllUnits(instructions: instructions, modeName: mode.title)
+            } else {
+                await processCurrentUnit(instructions: instructions, modeName: mode.title)
+            }
+
+            await MainActor.run {
+                processingAIMode = nil
+                activeAIMode = mode
+                readyAIModes.insert(mode)
+            }
+        }
+    }
+
+    private func processCurrentUnit(instructions: String, modeName: String) async {
+        guard let chapter = viewModel.currentChapter,
+              let unitID = readerCoordinator.unitIDForChapter(chapter),
+              let canonicalPackages = readerCoordinator.canonicalPackages,
+              let source = readerCoordinator.currentSource else { return }
+
+        let variant = await TextVariantService.shared.createVariant(
+            documentId: item.documentId,
+            unitID: unitID,
+            kind: .custom,
+            name: modeName,
+            instructions: instructions,
+            conciseness: nil,
+            canonicalPackages: canonicalPackages,
+            source: source
+        )
+
+        guard variant.status == .ready else { return }
+
+        let modifiedPackages = await TextVariantService.shared.apply(variant: variant, to: canonicalPackages)
+        await MainActor.run {
+            readerCoordinator.applyVariant(variant, modifiedPackages: modifiedPackages, appState: appState)
+            readerCoordinator.loadedTextVariantPackage = readerCoordinator.loadedTextVariantPackage ?? TextVariantPackage(documentId: item.documentId)
+            readerCoordinator.loadedTextVariantPackage?.variants.append(variant)
+        }
+    }
+
+    private func processAllUnits(instructions: String, modeName: String) async {
+        guard let canonicalPackages = readerCoordinator.canonicalPackages,
+              let source = readerCoordinator.currentSource else { return }
+
+        let units = canonicalPackages.textAnchorsPackage.units.sorted { $0.order < $1.order }
+        var allVariants: [TextVariant] = []
+
+        for unit in units {
+            guard !Task.isCancelled else { return }
+
+            let variant = await TextVariantService.shared.createVariant(
+                documentId: item.documentId,
+                unitID: unit.id,
+                kind: .custom,
+                name: modeName,
+                instructions: instructions,
+                conciseness: nil,
+                canonicalPackages: canonicalPackages,
+                source: source
+            )
+            allVariants.append(variant)
+        }
+
+        // Apply all variants by composing them onto canonical packages
+        var composedPackages = canonicalPackages
+        for variant in allVariants where variant.status == .ready {
+            composedPackages = await TextVariantService.shared.apply(variant: variant, to: composedPackages)
+        }
+
+        if let firstVariant = allVariants.first(where: { $0.status == .ready }) {
+            await MainActor.run {
+                readerCoordinator.applyVariant(firstVariant, modifiedPackages: composedPackages, appState: appState)
+            }
+        }
+    }
+
+    // MARK: - Recap Session
+
+    private func handleRecapSession() {
+        let bookTitle = item.title
+        let chapter = viewModel.currentChapter?.title ?? "current chapter"
+        let progress = Int(item.progress.percentComplete)
+        let recentWords = Array(viewModel.words.suffix(500)).joined(separator: " ")
+
+        let context = """
+        I've been reading "\(bookTitle)". I'm currently at \(chapter) (\(progress)% through).
+        Here's what I recently read: \(recentWords)
+        Give me a recap of what's happened and where I am in the story.
+        """
+
+        appState.pendingCuratorContext = context
+        readerCoordinator.minimize()
     }
 
 }

@@ -133,7 +133,7 @@ struct CreateCurationSheet: View {
                     coverURL: item.curatedCoverURL,
                     title: item.title,
                     iconName: item.coverIconName,
-                    size: CGSize(width: 40, height: 58),
+                    width: 40,
                     cornerRadius: 4
                 )
 

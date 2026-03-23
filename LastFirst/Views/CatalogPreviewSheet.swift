@@ -5,13 +5,33 @@ struct CatalogPreviewSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    private var catalogCoverIcon: String {
+        switch item.fileType {
+        case "epub": return "book.closed.fill"
+        case "pdf": return "doc.fill"
+        default: return "book.closed"
+        }
+    }
+
+    private var catalogContentType: CoverContentType {
+        switch item.fileType {
+        case "epub": return .epub
+        case "pdf": return .pdf
+        default: return .unknown
+        }
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             // Cover
-            CatalogCoverView(
-                item: item,
-                size: CGSize(width: 160, height: 233),
-                cornerRadius: 8
+            BookCoverView(
+                coverImageData: nil,
+                coverURL: item.coverURL,
+                title: item.title,
+                iconName: catalogCoverIcon,
+                width: 160,
+                cornerRadius: 8,
+                contentType: catalogContentType
             )
             .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
             .padding(.top, 24)

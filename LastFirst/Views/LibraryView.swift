@@ -445,6 +445,7 @@ struct LibraryView: View {
                     }
                 }
                 .scrollTargetLayout()
+                .padding(.vertical, 6)
             }
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: $currentContinuePage)
@@ -549,8 +550,9 @@ struct LibraryView: View {
             coverURL: item.curatedCoverURL,
             title: item.title,
             iconName: item.coverIconName,
+            width: 116,
             ribbonState: item.ribbonState,
-            flexibleAspectRatio: true
+            contentType: item.coverContentType
         )
         .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
     }

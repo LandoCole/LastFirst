@@ -345,43 +345,32 @@ struct CurationPreviewSheet: View {
 
     // MARK: - Cover Image
 
-    @ViewBuilder
     private func coverImage(for item: CurationItem) -> some View {
-        if let url = item.displayImageUrl {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 220, height: 330)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                case .failure:
-                    fallbackCoverLarge(title: item.displayTitle)
-                default:
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 220, height: 330)
-                }
-            }
-        } else {
-            fallbackCoverLarge(title: item.displayTitle)
+        BookCoverView(
+            coverImageData: nil,
+            coverURL: item.displayImageUrl,
+            title: item.displayTitle,
+            iconName: curationCoverIcon(for: item),
+            width: 220,
+            cornerRadius: 8,
+            contentType: curationCoverContentType(for: item)
+        )
+    }
+
+    private func curationCoverIcon(for item: CurationItem) -> String {
+        switch item.content?.fileType ?? item.itemType {
+        case "epub": return "book.closed.fill"
+        case "pdf": return "doc.fill"
+        default: return "newspaper.fill"
         }
     }
 
-    private func fallbackCoverLarge(title: String) -> some View {
-        let colors = Color.fallbackCoverPalette.map { Color(hex: $0) }
-        let index = abs(title.hashValue) % colors.count
-        return RoundedRectangle(cornerRadius: 8)
-            .fill(colors[index])
-            .frame(width: 220, height: 330)
-            .overlay {
-                Text(title)
-                    .font(.hedvigLettersSerif(18))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .multilineTextAlignment(.center)
-                    .padding(16)
-            }
+    private func curationCoverContentType(for item: CurationItem) -> CoverContentType {
+        switch item.displayFileType {
+        case "epub": return .epub
+        case "pdf": return .pdf
+        default: return .article
+        }
     }
 
     // MARK: - Helpers

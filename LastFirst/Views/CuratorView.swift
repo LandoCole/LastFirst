@@ -113,6 +113,16 @@ struct CuratorView: View {
         .sheet(isPresented: $showCuratedPane) {
             curatedPaneSheet
         }
+        .onAppear {
+            if let context = appState.pendingCuratorContext {
+                appState.pendingCuratorContext = nil
+                inputText = context
+                Task {
+                    await viewModel.sendMessage(context, model: selectedModel)
+                }
+                inputText = ""
+            }
+        }
     }
 
     // MARK: - Header
@@ -413,8 +423,9 @@ struct CuratorView: View {
                 coverURL: coverURL,
                 title: item.displayTitle,
                 iconName: iconName,
-                size: CGSize(width: 60, height: 87),
-                cornerRadius: 4
+                width: 60,
+                cornerRadius: 4,
+                contentType: coverContentType(for: item)
             )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -550,6 +561,14 @@ struct CuratorView: View {
     }
 
     // MARK: - Actions
+
+    private func coverContentType(for item: CurationItem) -> CoverContentType {
+        switch item.displayFileType {
+        case "epub": return .epub
+        case "pdf": return .pdf
+        default: return .article
+        }
+    }
 
     private func sendMessage() {
         let text = inputText

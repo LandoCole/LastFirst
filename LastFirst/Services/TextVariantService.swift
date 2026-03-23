@@ -76,6 +76,17 @@ actor TextVariantService {
             }
 
             await self.persistVariant(variant, documentId: documentId)
+
+            // Fire-and-forget sync to Supabase
+            if let userId = await MainActor.run(body: {
+                SupabaseManager.shared.client?.auth.currentSession?.user.id
+            }) {
+                let variantCopy = variant
+                Task.detached {
+                    await TextVariantSyncService.shared.syncToRemote(variant: variantCopy, userId: userId)
+                }
+            }
+
             return variant
         }
 
@@ -86,7 +97,22 @@ actor TextVariantService {
     }
 
     func loadVariants(documentId: UUID) async -> TextVariantPackage? {
-        try? await store.load(documentId: documentId)
+        if let local = try? await store.load(documentId: documentId) {
+            return local
+        }
+
+        // Fallback: try loading from remote
+        guard let userId = await MainActor.run(body: {
+            SupabaseManager.shared.client?.auth.currentSession?.user.id
+        }) else { return nil }
+
+        guard let remoteVariants = await TextVariantSyncService.shared.fetchFromRemote(
+            documentId: documentId, userId: userId
+        ), !remoteVariants.isEmpty else { return nil }
+
+        let package = TextVariantPackage(documentId: documentId, variants: remoteVariants)
+        try? await store.save(package)
+        return package
     }
 
     func deleteVariant(id: UUID, documentId: UUID) async {

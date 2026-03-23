@@ -16,6 +16,7 @@ class AppState: ObservableObject {
         didSet { saveSavedImages() }
     }
     @Published var lastError: AppError?
+    @Published var pendingCuratorContext: String?
     @Published var readingLists: [ReadingList] {
         didSet { saveReadingLists() }
     }

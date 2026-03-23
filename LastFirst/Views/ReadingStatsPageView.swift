@@ -46,6 +46,8 @@ struct ReadingStatsPageView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Recent Sessions")
                 .font(.hedvigLettersSerif(20))
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
 
             if statsVM.recentSessions.isEmpty {
                 VStack(spacing: 12) {
@@ -60,25 +62,19 @@ struct ReadingStatsPageView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                VStack(spacing: 8) {
-                    ForEach(statsVM.recentSessions.prefix(5), id: \.id) { session in
-                        SessionRow(
-                            session: session,
-                            title: statsVM.resolveTitle(for: session.documentId)
-                        )
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(statsVM.recentSessions, id: \.id) { session in
+                            SessionRow(
+                                session: session,
+                                title: statsVM.resolveTitle(for: session.documentId)
+                            )
+                        }
                     }
-                    if statsVM.recentSessions.count > 5 {
-                        Text("+\(statsVM.recentSessions.count - 5) more")
-                            .font(.rethinkSans(12))
-                            .foregroundStyle(.secondary)
-                    }
+                    .padding(.horizontal, 24)
                 }
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
         .padding(.bottom, 40)
     }
 
@@ -104,24 +100,6 @@ struct ReadingStatsPageView: View {
                         value: formatWords(statsVM.todayWordsRead),
                         label: "Words Read"
                     )
-                }
-            }
-
-            if !statsVM.todaySessions.prefix(5).isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Sessions")
-                        .font(.rethinkSans(14, weight: .medium))
-                    ForEach(statsVM.todaySessions.prefix(5), id: \.id) { session in
-                        SessionRow(
-                            session: session,
-                            title: statsVM.resolveTitle(for: session.documentId)
-                        )
-                    }
-                    if statsVM.todaySessions.count > 5 {
-                        Text("+\(statsVM.todaySessions.count - 5) more")
-                            .font(.rethinkSans(12))
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
 

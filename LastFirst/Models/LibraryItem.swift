@@ -1,5 +1,14 @@
 import Foundation
 
+// MARK: - Cover Content Type
+
+enum CoverContentType {
+    case epub      // has proper cover art — no title overlay
+    case pdf       // show title + image
+    case article   // show title + image
+    case unknown   // treat like article
+}
+
 // MARK: - Ribbon & Preview Enums
 
 enum RibbonState: Equatable {
@@ -172,6 +181,19 @@ extension LibraryItem {
     var curatedCoverURL: URL? {
         if case .curated(let c) = source { return c.coverUrl }
         return nil
+    }
+
+    var coverContentType: CoverContentType {
+        switch source {
+        case .localFile(let f): return f.fileType == .epub ? .epub : .pdf
+        case .web: return .article
+        case .curated(let c):
+            switch c.fileType {
+            case "epub": return .epub
+            case "pdf": return .pdf
+            default: return .article
+            }
+        }
     }
 }
 
